@@ -9,6 +9,19 @@ function validIcon(icon: string): string {
   return icon && icon.startsWith('mdi:') ? icon : CATEGORY_ICONS.default;
 }
 
+/** Returns the MIME type string for a video URL based on its extension. */
+function mimeForUrl(url: string): string {
+  const clean = url.split('?')[0].split('#')[0].toLowerCase();
+  if (clean.endsWith('.mp4'))  return 'video/mp4';
+  if (clean.endsWith('.webm')) return 'video/webm';
+  if (clean.endsWith('.mov'))  return 'video/mp4';   // QuickTime → treat as mp4
+  if (clean.endsWith('.ogv'))  return 'video/ogg';
+  if (clean.endsWith('.mkv'))  return 'video/x-matroska';
+  if (clean.endsWith('.m3u8')) return 'application/x-mpegURL';
+  // No known extension: let the browser negotiate
+  return '';
+}
+
 /**
  * Detail dialog that renders into document.body so it overlays the entire UI,
  * not just the card's shadow DOM.
@@ -76,11 +89,33 @@ export class DetailDialog extends LitElement {
     const e = this._event;
     const open = this._open;
 
-    // Prefer an explicit clip URL (metadata.clip_url, set via clip_url_template)
-    // over the thumbnail; render <video> for clips and video-extension URLs.
-    const clipUrl = (e?.metadata?.clip_url as string | undefined) || '';
-    const mediaSrc = clipUrl || e?.mediaUrl || '';
-    const mediaIsVideo = !!clipUrl || /\.(mp4|webm|mov|m3u8|mkv|ogv)([?#]|$)/i.test(mediaSrc);
+    // clip_url (from clip_url_template) is always a video.
+    // mediaSrc from mediaUrl may be an image — only treat as video if
+    // the URL itself carries a recognised video extension.
+    const clipUrl  = (e?.metadata?.clip_url as string | undefined) || '';
+    const mediaUrl = e?.mediaUrl || '';
+
+    const VIDEO_EXT = /\.(mp4|webm|mov|m3u8|mkv|ogv)([?#]|$)/i;
+    const mediaIsVideo = !!clipUrl || VIDEO_EXT.test(mediaUrl);
+    const mediaSrc     = clipUrl || mediaUrl;
+
+    // Build <video> markup with an explicit <source type="..."> so browsers
+    // don't have to sniff the MIME type (fixes "No video with supported format").
+    const videoHtml = (): string => {
+      const mime = mimeForUrl(mediaSrc);
+      const sourceTag = mime
+        ? `<source src="${this._escHtml(mediaSrc)}" type="${mime}">`
+        : `<source src="${this._escHtml(mediaSrc)}">`;
+      return `
+        <video class="media" controls autoplay muted loop playsinline
+               preload="metadata"
+               onerror="this.parentElement.style.display='none'">
+          ${sourceTag}
+          <p style="padding:8px;font-size:12px;color:#888">
+            Video konnte nicht geladen werden: ${this._escHtml(mediaSrc)}
+          </p>
+        </video>`;
+    };
 
     shadow.innerHTML = `
       <style>
@@ -318,9 +353,7 @@ export class DetailDialog extends LitElement {
 
           ${mediaSrc ? `
             <div class="media-wrap">
-              ${mediaIsVideo ? `
-                <video class="media" src="${this._escHtml(mediaSrc)}" controls autoplay muted loop playsinline></video>
-              ` : `
+              ${mediaIsVideo ? videoHtml() : `
                 <img class="media" src="${this._escHtml(mediaSrc)}" alt="" />
                 <div class="media-gradient"></div>
               `}
