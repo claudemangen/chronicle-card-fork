@@ -43,6 +43,26 @@ function toISOString(value: unknown): string {
   return str;
 }
 
+/**
+ * Make a potentially relative URL absolute.
+ *
+ * Rules (same logic as HA frontend's computeStateDomain helpers):
+ *  - http:// / https://  → keep as-is (already absolute)
+ *  - /local/, /api/, /hacsfiles/, etc. (leading /)  → keep as-is
+ *    (these are served by the HA HTTP server and work as root-relative paths
+ *     in any browser session that is already connected to HA)
+ *  - bare relative paths (no leading /)  → prefix with hass.hassUrl('')
+ *    so they become absolute and survive rendering outside the HA iframe.
+ */
+function toAbsoluteUrl(url: string, hass: HomeAssistant): string {
+  if (!url) return url;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('/')) return url;
+  // Bare relative path — make absolute using the HA base URL
+  const base = (hass as unknown as { hassUrl?: (path?: string) => string }).hassUrl?.('') ?? '';
+  return base ? `${base.replace(/\/$/, '')}/${url}` : url;
+}
+
 export class RestAdapter implements ISourceAdapter {
   readonly type = 'rest';
   private config!: SourceConfig;
@@ -113,7 +133,7 @@ export class RestAdapter implements ISourceAdapter {
         return [];
       }
 
-      return items.map((item, index) => this.mapItem(item as Record<string, unknown>, index));
+      return items.map((item, index) => this.mapItem(item as Record<string, unknown>, index, hass));
     } catch (err) {
       console.warn('[chronicle-card] RestAdapter: failed to fetch events', err);
       return [];
@@ -122,17 +142,22 @@ export class RestAdapter implements ISourceAdapter {
 
   /**
    * Convert a raw media path to the appropriate format.
-   * /media/... paths become media-source:// content IDs for later resolution via WS.
-   * HTTP(S) URLs pass through as-is for direct use in mediaUrl.
+   *
+   * /media/... paths become media-source:// content IDs for later WS resolution.
+   * Bare relative paths (no leading /) are made absolute via toAbsoluteUrl().
+   * HTTP(S) URLs and root-relative HA paths (/local/, /api/, …) pass through as-is.
    */
-  private classifyMedia(rawUrl: string | undefined): { mediaUrl?: string; mediaContentId?: string } {
+  private classifyMedia(
+    rawUrl: string | undefined,
+    hass: HomeAssistant,
+  ): { mediaUrl?: string; mediaContentId?: string } {
     if (!rawUrl) return {};
     if (rawUrl.startsWith('/media/')) {
       // Convert HA /media/ path to media_source content ID for WS resolution
       return { mediaContentId: `media-source://media_source/local/${rawUrl.slice('/media/'.length)}` };
     }
-    // Absolute URLs or other paths can be used directly
-    return { mediaUrl: rawUrl };
+    // Resolve bare relative paths to absolute before handing them to <img>/<video>
+    return { mediaUrl: toAbsoluteUrl(rawUrl, hass) };
   }
 
   /**
@@ -146,7 +171,7 @@ export class RestAdapter implements ISourceAdapter {
     });
   }
 
-  private mapItem(item: Record<string, unknown>, index: number): ChronicleEvent {
+  private mapItem(item: Record<string, unknown>, index: number, hass: HomeAssistant): ChronicleEvent {
     const fieldMap = this.config.field_map || {};
 
     const getField = (chronicleField: string, fallback: unknown = ''): unknown => {
@@ -173,7 +198,12 @@ export class RestAdapter implements ISourceAdapter {
       rawMediaUrl = this.expandTemplate(this.config.media_url_template, item);
     }
     const rawMediaContentId = getField('mediaContentId', undefined) as string | undefined;
-    const media = this.classifyMedia(rawMediaUrl);
+    const media = this.classifyMedia(rawMediaUrl, hass);
+
+    // Resolve clip URL and make absolute if needed
+    const rawClipUrl = this.config.clip_url_template
+      ? toAbsoluteUrl(this.expandTemplate(this.config.clip_url_template, item), hass)
+      : undefined;
 
     // Resolve icon/color: explicit field → icon_map → fuzzy keyword → default → category → fallback
     const explicitIcon = getField('icon', undefined) as string | undefined;
@@ -202,9 +232,7 @@ export class RestAdapter implements ISourceAdapter {
         raw_index: index,
         // Raw upstream id (pre-namespacing) — used by {id} action placeholders
         raw_id: mappedId,
-        ...(this.config.clip_url_template
-          ? { clip_url: this.expandTemplate(this.config.clip_url_template, item) }
-          : {}),
+        ...(rawClipUrl ? { clip_url: rawClipUrl } : {}),
         ...((getField('metadata', undefined) as Record<string, unknown>) || {}),
       },
     };
