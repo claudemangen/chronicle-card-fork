@@ -1,7 +1,7 @@
 {
-  "name": "chronicle-card",
+  "name": "chronicle-card-fork",
   "version": "1.13.0",
-  "description": "A universal, extensible timeline card for Home Assistant",
+  "description": "A universal, extensible timeline card for Home Assistant — patched fork",
   "main": "dist/chronicle-card.js",
   "scripts": {
     "build": "rollup -c",
