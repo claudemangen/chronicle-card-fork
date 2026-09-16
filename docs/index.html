@@ -1,0 +1,2467 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chronicle Card — Every Event. One Timeline.</title>
+  <meta name="description" content="A universal, extensible timeline card for Home Assistant. Display events from any source — calendars, REST APIs, Frigate, entity history — in a single, interactive timeline.">
+  <meta property="og:title" content="Chronicle Card for Home Assistant">
+  <meta property="og:description" content="Every event in your smart home. One beautiful timeline.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://kadenThomp36.github.io/chronicle-card/">
+  <meta property="og:image" content="https://raw.githubusercontent.com/KadenThomp36/chronicle-card/main/images/preview.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230d1117'/><line x1='10' y1='6' x2='10' y2='26' stroke='%232196F3' stroke-width='2' stroke-linecap='round'/><circle cx='10' cy='10' r='3' fill='%23FF9800'/><circle cx='10' cy='18' r='3' fill='%232196F3'/><circle cx='10' cy='26' r='3' fill='%239C27B0'/><line x1='15' y1='10' x2='26' y2='10' stroke='%23333' stroke-width='1.5' stroke-linecap='round'/><line x1='15' y1='18' x2='24' y2='18' stroke='%23333' stroke-width='1.5' stroke-linecap='round'/><line x1='15' y1='26' x2='22' y2='26' stroke='%23333' stroke-width='1.5' stroke-linecap='round'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --blue: #2196F3;
+      --blue-dim: #1565C0;
+      --blue-glow: rgba(33, 150, 243, 0.15);
+      --orange: #FF9800;
+      --red: #D32F2F;
+      --purple: #9C27B0;
+      --green: #43A047;
+      --brown: #795548;
+      --teal: #00BCD4;
+      --yellow: #FFC107;
+      --grey: #78909C;
+      --surface: #0d1117;
+      --surface-2: #161b22;
+      --surface-3: #1c2129;
+      --surface-4: #21262d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-dim: #8b949e;
+      --text-faint: #484f58;
+      --radius: 16px;
+      --radius-sm: 10px;
+      --radius-xs: 6px;
+    }
+
+    .light {
+      --surface: #ffffff;
+      --surface-2: #f6f8fa;
+      --surface-3: #eef1f5;
+      --surface-4: #e2e6eb;
+      --border: #d0d7de;
+      --text: #1f2328;
+      --text-dim: #656d76;
+      --text-faint: #a0a8b2;
+      --blue-glow: rgba(33, 150, 243, 0.08);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+    html {
+      overflow-x: hidden;
+    }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--surface);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Noise texture overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      opacity: 0.015;
+      pointer-events: none;
+      z-index: 9999;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size: 256px;
+    }
+
+    /* ===== HEADER ===== */
+    header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 1000;
+      padding: 0 24px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: color-mix(in srgb, var(--surface) 80%, transparent);
+      backdrop-filter: blur(20px) saturate(1.5);
+      -webkit-backdrop-filter: blur(20px) saturate(1.5);
+      border-bottom: 1px solid var(--border);
+      transition: all 0.3s;
+    }
+    .header-scrolled { box-shadow: 0 4px 24px rgba(0,0,0,0.15); }
+    .logo {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none; color: var(--text);
+      font-weight: 700; font-size: 18px; letter-spacing: -0.02em;
+    }
+    .logo svg { width: 28px; height: 28px; flex-shrink: 0; }
+    .logo-dot { color: var(--blue); }
+    .nav-links {
+      display: flex; align-items: center; gap: 8px;
+      list-style: none;
+    }
+    .nav-links a {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+    .nav-links a:hover, .nav-links a.active { color: var(--text); background: var(--surface-3); }
+    .nav-right { display: flex; align-items: center; gap: 12px; }
+    .version-badge {
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--blue);
+      background: var(--blue-glow);
+      padding: 4px 10px;
+      border-radius: 20px;
+      border: 1px solid color-mix(in srgb, var(--blue) 20%, transparent);
+    }
+    .theme-toggle {
+      background: none; border: none; cursor: pointer;
+      color: var(--text-dim); padding: 6px;
+      border-radius: 8px; transition: all 0.2s;
+      display: flex; align-items: center;
+    }
+    .theme-toggle:hover { color: var(--text); background: var(--surface-3); }
+    .btn-get-started {
+      background: var(--blue);
+      color: #fff;
+      text-decoration: none;
+      padding: 8px 20px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.2s;
+      border: none;
+    }
+    .btn-get-started:hover { background: var(--blue-dim); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(33,150,243,0.3); }
+    .mobile-menu-btn {
+      display: none; background: none; border: none;
+      color: var(--text); cursor: pointer; padding: 6px;
+    }
+
+    /* ===== HERO ===== */
+    .hero {
+      padding: 160px 24px 80px;
+      max-width: 1200px;
+      margin: 0 auto;
+      text-align: center;
+      position: relative;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 6px 16px 6px 8px;
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 32px;
+      animation: fadeDown 0.6s ease;
+    }
+    .hero-badge-dot {
+      width: 8px; height: 8px;
+      background: #FF9800;
+      border-radius: 50%;
+      animation: pulse-dot 2s ease-in-out infinite;
+      animation: pulse-dot 2s ease infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(67, 160, 71, 0.4); }
+      50% { opacity: 0.8; box-shadow: 0 0 0 6px rgba(67, 160, 71, 0); }
+    }
+    .hero h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(48px, 8vw, 88px);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      margin-bottom: 24px;
+      animation: fadeDown 0.6s ease 0.1s both;
+    }
+    .hero h1 .gradient-text {
+      background: linear-gradient(135deg, var(--blue), var(--teal), var(--blue));
+      background-size: 200% 200%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: gradient-shift 6s ease infinite;
+    }
+    @keyframes gradient-shift {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+    .hero p {
+      font-size: clamp(16px, 2vw, 20px);
+      color: var(--text-dim);
+      max-width: 600px;
+      margin: 0 auto 40px;
+      line-height: 1.7;
+      animation: fadeDown 0.6s ease 0.2s both;
+    }
+    .hero-ctas {
+      display: flex; gap: 16px;
+      justify-content: center;
+      animation: fadeDown 0.6s ease 0.3s both;
+    }
+    .cta-primary {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--blue);
+      color: #fff;
+      text-decoration: none;
+      padding: 14px 32px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      transition: all 0.25s;
+    }
+    .cta-primary:hover { background: var(--blue-dim); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(33,150,243,0.3); }
+    .cta-secondary {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--surface-2);
+      color: var(--text);
+      text-decoration: none;
+      padding: 14px 32px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      transition: all 0.25s;
+    }
+    .cta-secondary:hover { background: var(--surface-3); transform: translateY(-2px); border-color: var(--text-faint); }
+
+    /* Hero mock card */
+    .hero-card-wrapper {
+      margin-top: 64px;
+      perspective: 1000px;
+      animation: fadeUp 0.8s ease 0.5s both;
+    }
+    .hero-card {
+      max-width: 520px;
+      margin: 0 auto;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.03) inset;
+      transform: rotateX(2deg);
+      transition: transform 0.4s ease;
+    }
+    .hero-card:hover { transform: rotateX(0deg); }
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-header-title {
+      font-size: 15px; font-weight: 600;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .card-header-title svg { color: var(--blue); }
+    .card-header-actions { display: flex; gap: 6px; }
+    .card-header-actions span {
+      width: 28px; height: 28px;
+      border-radius: 6px;
+      background: var(--surface-3);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .timeline-body { padding: 8px 0; }
+    .tl-event {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 12px 20px;
+      position: relative;
+      transition: background 0.15s;
+    }
+    .tl-event:hover { background: var(--surface-3); }
+    .tl-line {
+      position: absolute;
+      left: 33px; top: 0; bottom: 0;
+      width: 2px;
+      background: var(--border);
+    }
+    .tl-event:first-child .tl-line { top: 50%; }
+    .tl-event:last-child .tl-line { bottom: 50%; }
+    .tl-dot {
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      z-index: 1;
+      font-size: 14px;
+    }
+    .tl-content { flex: 1; min-width: 0; }
+    .tl-title {
+      font-size: 13px; font-weight: 600;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .tl-severity {
+      font-size: 10px; font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .tl-meta {
+      font-size: 11px; color: var(--text-dim);
+      margin-top: 2px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .tl-thumbnail {
+      width: 44px; height: 34px;
+      border-radius: 6px;
+      flex-shrink: 0;
+      object-fit: cover;
+    }
+
+    /* Animated events */
+    .tl-event { animation: slideInEvent 0.4s ease both; }
+    .tl-event:nth-child(1) { animation-delay: 0.7s; }
+    .tl-event:nth-child(2) { animation-delay: 0.85s; }
+    .tl-event:nth-child(3) { animation-delay: 1.0s; }
+    .tl-event:nth-child(4) { animation-delay: 1.15s; }
+    .tl-event:nth-child(5) { animation-delay: 1.3s; }
+    @keyframes slideInEvent {
+      from { opacity: 0; transform: translateX(-16px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    /* Glow behind hero card */
+    .hero-glow {
+      position: absolute;
+      width: 500px; height: 500px;
+      left: 50%; top: 60%;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, var(--blue-glow) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    /* ===== SECTIONS ===== */
+    section { padding: 100px 24px; max-width: 1200px; margin: 0 auto; }
+    .section-label {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--blue);
+      margin-bottom: 12px;
+    }
+    .section-title {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(32px, 5vw, 48px);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+    }
+    .section-subtitle {
+      font-size: 17px;
+      color: var(--text-dim);
+      max-width: 560px;
+      line-height: 1.7;
+    }
+    .section-header { margin-bottom: 56px; }
+    .section-header.center { text-align: center; }
+    .section-header.center .section-subtitle { margin: 0 auto; }
+
+    /* Fade in on scroll */
+    .reveal {
+      opacity: 0;
+      transform: translateY(32px);
+      transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+    .reveal-delay-4 { transition-delay: 0.4s; }
+
+    /* ===== BENTO GRID ===== */
+    .bento-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: auto auto;
+      gap: 16px;
+    }
+    .bento-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      overflow: hidden;
+    }
+    .bento-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, transparent 40%, var(--blue-glow));
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .bento-card:hover::before { opacity: 1; }
+    .bento-card:hover {
+      transform: translateY(-4px);
+      border-color: color-mix(in srgb, var(--blue) 30%, var(--border));
+      box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+    }
+    .bento-card.span-2 { grid-column: span 2; }
+    .bento-icon {
+      width: 44px; height: 44px;
+      border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 20px;
+      font-size: 22px;
+    }
+    .bento-card h3 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      letter-spacing: -0.01em;
+    }
+    .bento-card p {
+      font-size: 14px;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+    .bento-visual {
+      margin-top: 20px;
+      background: var(--surface-3);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      overflow: hidden;
+    }
+
+    /* Mini source icons row */
+    .source-icons {
+      display: flex; gap: 10px; margin-top: 16px;
+    }
+    .source-icon {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      border: 1px solid var(--border);
+      background: var(--surface-3);
+      transition: all 0.2s;
+    }
+    .source-icon:hover { transform: scale(1.15); border-color: var(--blue); }
+
+    /* Language flags */
+    .lang-flags {
+      display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px;
+    }
+    .lang-flag {
+      font-size: 24px;
+      padding: 4px;
+      transition: transform 0.2s;
+    }
+    .lang-flag:hover { transform: scale(1.3); }
+
+    /* Severity demo */
+    .severity-row {
+      display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;
+    }
+    .severity-pill {
+      font-size: 11px; font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* ===== SOURCE TABS ===== */
+    .source-section { position: relative; }
+    .source-tabs {
+      display: flex;
+      gap: 4px;
+      background: var(--surface-2);
+      border-radius: var(--radius-sm);
+      padding: 4px;
+      border: 1px solid var(--border);
+      width: fit-content;
+      margin-bottom: 32px;
+    }
+    .source-tab {
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      color: var(--text-dim);
+      background: transparent;
+      border: none;
+      transition: all 0.2s;
+      display: flex; align-items: center; gap: 8px;
+      font-family: inherit;
+    }
+    .source-tab:hover { color: var(--text); }
+    .source-tab.active {
+      color: var(--text);
+      background: var(--surface-4);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .source-content {
+      display: none;
+      gap: 32px;
+      align-items: flex-start;
+    }
+    .source-content.active { display: grid; grid-template-columns: 1fr 1fr; }
+    .source-info h3 { font-size: 22px; font-weight: 700; margin-bottom: 12px; }
+    .source-info p { color: var(--text-dim); margin-bottom: 20px; line-height: 1.7; }
+    .source-features { list-style: none; }
+    .source-features li {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 8px 0;
+      font-size: 14px;
+      color: var(--text-dim);
+    }
+    .source-features li::before {
+      content: '✓';
+      color: var(--blue);
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* Code block */
+    .code-block {
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+    .code-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-4);
+    }
+    .code-header span {
+      font-size: 12px; color: var(--text-dim);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .code-copy {
+      background: none; border: none;
+      color: var(--text-dim); cursor: pointer;
+      font-size: 12px; padding: 4px 8px;
+      border-radius: 4px;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+    .code-copy:hover { color: var(--text); background: var(--surface-2); }
+    .code-body {
+      padding: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    .code-body .key { color: var(--blue); }
+    .code-body .str { color: var(--green); }
+    .code-body .comment { color: var(--text-faint); font-style: italic; }
+    .code-body .num { color: var(--orange); }
+
+    /* ===== EASY TO USE ===== */
+    .easy-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: center;
+    }
+    .easy-text h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 40px; font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+    }
+    .easy-text p {
+      color: var(--text-dim);
+      font-size: 17px;
+      line-height: 1.7;
+      margin-bottom: 24px;
+    }
+
+    /* ===== USE CASES ===== */
+    .usecase-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    .usecase-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: all 0.3s;
+    }
+    .usecase-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+    }
+    .usecase-visual {
+      height: 180px;
+      position: relative;
+      overflow: hidden;
+    }
+    .usecase-content { padding: 24px; }
+    .usecase-content h3 { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+    .usecase-content p { font-size: 14px; color: var(--text-dim); line-height: 1.6; }
+    .usecase-tag {
+      display: inline-block;
+      font-size: 11px; font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Mini timeline inside use case cards */
+    .mini-tl { padding: 12px 16px; }
+    .mini-tl-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 0;
+      font-size: 12px;
+      position: relative;
+    }
+    .mini-tl-item + .mini-tl-item::before {
+      content: '';
+      position: absolute;
+      left: 10px; top: -6px;
+      width: 1px; height: 12px;
+      background: var(--border);
+    }
+    .mini-tl-dot {
+      width: 20px; height: 20px;
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      font-size: 10px;
+    }
+    .mini-tl-text { color: var(--text-dim); }
+    .mini-tl-time {
+      margin-left: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--text-faint);
+    }
+
+    /* ===== INSTALL ===== */
+    .install-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    .install-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 36px;
+      min-width: 0;
+      overflow: hidden;
+    }
+    .install-card h3 {
+      font-size: 20px; font-weight: 700;
+      margin-bottom: 8px;
+      display: flex; align-items: center; gap: 10px;
+      flex-wrap: wrap;
+    }
+    .install-card p { color: var(--text-dim); margin-bottom: 24px; font-size: 14px; }
+    .install-steps { list-style: none; counter-reset: step; }
+    .install-steps li {
+      counter-increment: step;
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 14px;
+      align-items: start;
+      padding: 10px 0;
+      font-size: 14px;
+      color: var(--text-dim);
+    }
+    .install-steps li::before {
+      content: counter(step);
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      background: var(--blue-glow);
+      color: var(--blue);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      font-size: 13px;
+      font-weight: 700;
+      border: 1px solid color-mix(in srgb, var(--blue) 20%, transparent);
+    }
+    .install-steps li > span {
+      min-width: 0;
+    }
+    .install-steps code {
+      word-break: break-all;
+      font-size: 12px;
+    }
+    .install-highlight {
+      border-color: var(--blue);
+      background: linear-gradient(135deg, var(--surface-2), color-mix(in srgb, var(--blue) 5%, var(--surface-2)));
+    }
+    .copy-url-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 6px;
+      max-width: 100%;
+      min-width: 0;
+    }
+    .copy-url-wrap code {
+      flex: 1;
+      min-width: 0;
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 11px;
+      background: var(--surface);
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .copy-btn {
+      flex-shrink: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 8px;
+      cursor: pointer;
+      color: var(--text-dim);
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+    }
+    .copy-btn:hover { color: var(--blue); border-color: var(--blue); }
+    .copy-btn.copied { color: #4CAF50; border-color: #4CAF50; }
+    .pending-badge {
+      font-size: 11px; font-weight: 700;
+      background: var(--blue);
+      color: #fff;
+      padding: 3px 10px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* ===== FAQ ===== */
+    .faq-list { max-width: 720px; margin: 0 auto; }
+    .faq-item {
+      border-bottom: 1px solid var(--border);
+    }
+    .faq-question {
+      width: 100%;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 0;
+      background: none; border: none;
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: left;
+      font-family: inherit;
+      transition: color 0.2s;
+    }
+    .faq-question:hover { color: var(--blue); }
+    .faq-arrow {
+      transition: transform 0.3s;
+      flex-shrink: 0;
+      color: var(--text-dim);
+    }
+    .faq-item.open .faq-arrow { transform: rotate(180deg); }
+    .faq-answer {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease, padding 0.3s;
+    }
+    .faq-item.open .faq-answer { max-height: 200px; }
+    .faq-answer p {
+      padding-bottom: 20px;
+      color: var(--text-dim);
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    /* ===== CTA BANNER ===== */
+    .cta-banner {
+      text-align: center;
+      padding: 80px 24px;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+    .cta-banner h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(32px, 4vw, 44px);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+    }
+    .cta-banner p { color: var(--text-dim); font-size: 17px; margin-bottom: 32px; }
+
+    /* ===== FOOTER ===== */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 48px 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 40px;
+      margin-bottom: 40px;
+    }
+    .footer-brand p {
+      color: var(--text-dim);
+      font-size: 14px;
+      line-height: 1.6;
+      margin-top: 12px;
+    }
+    .footer-col h4 {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-faint);
+      margin-bottom: 16px;
+    }
+    .footer-col a {
+      display: block;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 14px;
+      padding: 4px 0;
+      transition: color 0.2s;
+    }
+    .footer-col a:hover { color: var(--text); }
+    .footer-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      color: var(--text-faint);
+      font-size: 13px;
+    }
+    .footer-socials {
+      display: flex; gap: 16px;
+    }
+    .footer-socials a {
+      color: var(--text-faint);
+      transition: color 0.2s;
+    }
+    .footer-socials a:hover { color: var(--text); }
+
+    /* ===== ANIMATIONS ===== */
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.4); }
+      50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(255, 152, 0, 0); }
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(40px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 900px) {
+      .bento-grid { grid-template-columns: 1fr 1fr; }
+      .bento-card.span-2 { grid-column: span 2; }
+      .source-content.active { grid-template-columns: 1fr; }
+      .easy-section { grid-template-columns: 1fr; }
+      .usecase-grid { grid-template-columns: 1fr; }
+      .install-grid { grid-template-columns: 1fr; }
+      .footer-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 640px) {
+      .bento-grid { grid-template-columns: 1fr; }
+      .bento-card.span-2 { grid-column: span 1; }
+      .nav-links { display: none; }
+      .mobile-menu-btn { display: block; }
+      .version-badge { display: none; }
+      .btn-get-started { display: none; }
+      .hero { padding: 120px 16px 60px; }
+      .hero-badge { font-size: 12px; padding: 6px 14px; }
+      .hero-ctas { flex-direction: column; align-items: center; }
+      section { padding: 60px 16px; }
+      .install-card { padding: 24px 20px; }
+      .install-card h3 { font-size: 18px; }
+      .footer-grid { grid-template-columns: 1fr; gap: 24px; }
+      .footer-bottom { flex-direction: column; gap: 12px; text-align: center; }
+      .source-tabs { overflow-x: auto; width: 100%; }
+    }
+
+    /* Respect reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* Mobile nav overlay */
+    .mobile-nav {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1001;
+      background: color-mix(in srgb, var(--surface) 95%, transparent);
+      backdrop-filter: blur(20px);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+    }
+    .mobile-nav.open { display: flex; }
+    .mobile-nav a {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--text);
+      text-decoration: none;
+    }
+    .mobile-nav-close {
+      position: absolute;
+      top: 20px; right: 20px;
+      background: none; border: none;
+      color: var(--text); cursor: pointer;
+      font-size: 24px;
+      padding: 8px;
+      z-index: 1;
+    }
+
+    /* ===== CHRONICLE CARD REPLICA ===== */
+
+    /* Hero composition container */
+    .cc-hero-composition {
+      margin-top: 64px;
+      position: relative;
+      min-height: 620px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      perspective: 1200px;
+      animation: fadeUp 0.8s ease 0.5s both;
+    }
+
+    /* Background cards (blurred, static) */
+    .cc-bg-card-left {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-130%, -40%) rotate(-3deg) scale(0.75);
+      filter: blur(2px);
+      opacity: 0.45;
+      pointer-events: none;
+      z-index: 0;
+      width: 320px;
+    }
+    .cc-bg-card-right {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(30%, -30%) rotate(2deg) scale(0.7);
+      filter: blur(3px);
+      opacity: 0.35;
+      pointer-events: none;
+      z-index: 0;
+      width: 280px;
+    }
+
+    /* Main card container */
+    .cc-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      width: 100%;
+    }
+    .cc-main-card-wrap {
+      position: relative;
+      z-index: 2;
+      width: 520px;
+      max-width: 100%;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.3);
+      border-radius: var(--radius);
+      transform: rotateX(2deg);
+      transition: transform 0.4s ease;
+    }
+    .cc-main-card-wrap:hover {
+      transform: rotateX(0deg);
+    }
+
+    /* Card header */
+    .cc-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .cc-card-header-title {
+      font-size: 15px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text);
+    }
+    .cc-card-header-title svg { color: var(--blue); }
+    .cc-card-header-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .cc-card-header-actions span {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: var(--surface-3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .cc-card-header-actions span:hover {
+      background: var(--surface-4);
+    }
+
+    /* Timeline body */
+    .cc-timeline-body {
+      padding: 0;
+      position: relative;
+      max-height: 540px;
+      overflow: hidden;
+    }
+
+    /* Timeline line */
+    .cc-timeline-line {
+      position: absolute;
+      left: 16px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: rgba(127,127,127,0.15);
+      mask-image: linear-gradient(to bottom, transparent, black 40px, black calc(100% - 40px), transparent);
+      -webkit-mask-image: linear-gradient(to bottom, transparent, black 40px, black calc(100% - 40px), transparent);
+      z-index: 0;
+    }
+
+    /* Date header */
+    .cc-date-header {
+      display: flex;
+      align-items: center;
+      padding: 12px 20px 6px 0;
+      gap: 12px;
+    }
+    .cc-date-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      padding-left: 42px;
+      flex-shrink: 0;
+    }
+    .cc-date-line {
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(to right, var(--border), transparent);
+    }
+    .cc-date-count {
+      font-size: 9.5px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--surface-3);
+      color: var(--text-dim);
+      flex-shrink: 0;
+    }
+
+    /* Event row */
+    .cc-event-row {
+      display: flex;
+      align-items: flex-start;
+      padding: 4px 12px;
+      position: relative;
+      cursor: pointer;
+    }
+
+    /* Icon wrap */
+    .cc-icon-wrap {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-right: 8px;
+      margin-top: 9px;
+      z-index: 2;
+      color: #fff;
+      font-size: 15px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+      position: relative;
+    }
+
+    /* Event item body */
+    .cc-event-item {
+      flex: 1;
+      padding: 9px 10px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+      min-width: 0;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .cc-event-item:hover {
+      background: rgba(127,127,127,0.05);
+      border-color: rgba(127,127,127,0.08);
+      box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+    }
+    .cc-event-item-text {
+      flex: 1;
+      min-width: 0;
+    }
+
+    /* Event title */
+    .cc-event-title {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: -0.15px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* Event time */
+    .cc-event-time {
+      font-size: 10.5px;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    /* Event description */
+    .cc-event-desc {
+      font-size: 12px;
+      color: var(--text);
+      opacity: 0.85;
+      margin-top: 2px;
+    }
+
+    /* Category tag */
+    .cc-category-tag {
+      font-size: 10px;
+      padding: 1px 7px;
+      border-radius: 20px;
+      background: rgba(127,127,127,0.08);
+      color: var(--text-dim);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    /* Severity badge */
+    .cc-severity {
+      height: 16px;
+      padding: 0 7px;
+      border-radius: 20px;
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+      color: #fff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      display: inline-flex;
+      align-items: center;
+      line-height: 1;
+      white-space: nowrap;
+    }
+    .cc-severity-critical { background: #D32F2F; }
+    .cc-severity-warning { background: #FF9800; }
+    .cc-severity-info { background: #2196F3; }
+    .cc-severity-debug { background: #9E9E9E; }
+
+    /* Thumbnail */
+    .cc-thumbnail {
+      width: 52px;
+      height: 52px;
+      border-radius: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+    }
+
+    /* Event group */
+    .cc-group-row {
+      display: flex;
+      align-items: flex-start;
+      padding: 4px 12px;
+      position: relative;
+    }
+    .cc-group-icon-wrap {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-right: 8px;
+      margin-top: 9px;
+      z-index: 2;
+      color: #fff;
+      font-size: 15px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+      position: relative;
+      cursor: pointer;
+    }
+    .cc-group-count-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--blue);
+      color: #fff;
+      font-size: 9px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid var(--surface-2);
+      line-height: 1;
+    }
+    .cc-group-header {
+      flex: 1;
+      padding: 9px 10px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+      cursor: pointer;
+      min-width: 0;
+    }
+    .cc-group-header:hover {
+      background: rgba(127,127,127,0.05);
+      border-color: rgba(127,127,127,0.08);
+      box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+    }
+    .cc-group-title-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .cc-group-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .cc-group-time {
+      font-size: 10.5px;
+      font-weight: 500;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+    .cc-group-chevron {
+      margin-left: auto;
+      color: var(--text-dim);
+      transition: transform 0.25s ease;
+      flex-shrink: 0;
+    }
+    .cc-group-chevron.cc-expanded {
+      transform: rotate(180deg);
+    }
+    .cc-group-children {
+      margin-left: 42px;
+      border-left: 2px solid var(--border);
+      overflow: hidden;
+      max-height: 0;
+      opacity: 0;
+      transition: max-height 0.3s ease, opacity 0.25s ease, padding 0.25s ease;
+    }
+    .cc-group-children.cc-expanded {
+      max-height: 300px;
+      opacity: 1;
+      padding: 4px 0;
+    }
+    .cc-group-child {
+      display: flex;
+      align-items: center;
+      padding: 6px 12px;
+      gap: 8px;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background 0.15s;
+    }
+    .cc-group-child:hover {
+      background: rgba(127,127,127,0.05);
+    }
+    .cc-group-child-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .cc-group-child-title {
+      font-size: 12px;
+      color: var(--text);
+      flex: 1;
+    }
+    .cc-group-child-time {
+      font-size: 10px;
+      color: var(--text-dim);
+      font-variant-numeric: tabular-nums;
+    }
+    .cc-group-child-source {
+      font-size: 10px;
+      color: var(--text-faint);
+    }
+
+    /* Detail dialog */
+    .cc-dialog-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      z-index: 10000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .cc-dialog-overlay.cc-visible {
+      display: flex;
+      opacity: 1;
+    }
+    .cc-dialog {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: 0 12px 48px rgba(0,0,0,0.18);
+      max-width: 460px;
+      width: calc(100% - 32px);
+      max-height: 90vh;
+      overflow-y: auto;
+      transform: scale(0.95) translateY(10px);
+      transition: transform 0.25s ease;
+      position: relative;
+    }
+    .cc-dialog-overlay.cc-visible .cc-dialog {
+      transform: scale(1) translateY(0);
+    }
+    .cc-dialog-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: none;
+      background: var(--surface-3);
+      color: var(--text-dim);
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+      z-index: 1;
+    }
+    .cc-dialog-close:hover {
+      background: var(--surface-4);
+      color: var(--text);
+    }
+    .cc-dialog-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 24px 24px 16px;
+    }
+    .cc-dialog-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 18px;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    .cc-dialog-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .cc-dialog-time {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+    .cc-dialog-tags {
+      display: flex;
+      gap: 8px;
+      padding: 0 24px 16px;
+      flex-wrap: wrap;
+    }
+    .cc-dialog-meta {
+      margin: 0 24px 24px;
+      background: var(--surface-3);
+      border-radius: 12px;
+      padding: 2px 0;
+      overflow: hidden;
+    }
+    .cc-dialog-meta-row {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      padding: 10px 16px;
+      font-size: 13px;
+      border-bottom: 1px solid var(--border);
+    }
+    .cc-dialog-meta-row:last-child {
+      border-bottom: none;
+    }
+    .cc-dialog-meta-label {
+      color: var(--text-dim);
+      font-weight: 500;
+    }
+    .cc-dialog-meta-value {
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+    }
+
+    /* Animated events in hero */
+    .cc-event-row, .cc-group-row {
+      animation: cc-slideIn 0.4s ease both;
+    }
+    .cc-event-row:nth-child(1), .cc-group-row:nth-child(1) { animation-delay: 0.7s; }
+    .cc-event-row:nth-child(2), .cc-group-row:nth-child(2) { animation-delay: 0.85s; }
+    .cc-event-row:nth-child(3), .cc-group-row:nth-child(3) { animation-delay: 1.0s; }
+    .cc-event-row:nth-child(4), .cc-group-row:nth-child(4) { animation-delay: 1.15s; }
+    .cc-event-row:nth-child(5), .cc-group-row:nth-child(5) { animation-delay: 1.3s; }
+    .cc-date-header { animation: cc-slideIn 0.4s ease 0.6s both; }
+    @keyframes cc-slideIn {
+      from { opacity: 0; transform: translateX(-16px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    /* Use cases section */
+    .cc-usecase-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    .cc-usecase-item {
+      perspective: 1000px;
+    }
+    .cc-usecase-card-wrap {
+      position: relative;
+      transition: transform 0.4s ease;
+      transform-style: preserve-3d;
+    }
+    .cc-usecase-card-wrap:hover {
+      transform: rotateX(-2deg) translateY(-6px);
+    }
+    .cc-usecase-glow {
+      position: absolute;
+      inset: -20px;
+      border-radius: 30px;
+      opacity: 0.15;
+      filter: blur(30px);
+      z-index: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    .cc-usecase-card-wrap:hover .cc-usecase-glow {
+      opacity: 0.25;
+    }
+    .cc-usecase-inner {
+      position: relative;
+      z-index: 1;
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .cc-usecase-label {
+      padding: 20px 20px 0;
+    }
+    .cc-usecase-tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .cc-usecase-info {
+      padding: 16px 20px 20px;
+    }
+    .cc-usecase-info h3 {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+    .cc-usecase-info p {
+      font-size: 14px;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+
+    /* Use case mini timeline events (interactive) */
+    .cc-uc-timeline {
+      padding: 8px 0;
+      position: relative;
+    }
+    .cc-uc-timeline::before {
+      content: '';
+      position: absolute;
+      left: 16px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: rgba(127,127,127,0.15);
+      mask-image: linear-gradient(to bottom, transparent, black 12px, black calc(100% - 12px), transparent);
+      -webkit-mask-image: linear-gradient(to bottom, transparent, black 12px, black calc(100% - 12px), transparent);
+    }
+    .cc-uc-event {
+      display: flex;
+      align-items: flex-start;
+      padding: 3px 12px;
+      position: relative;
+    }
+    .cc-uc-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-right: 8px;
+      margin-top: 5px;
+      z-index: 2;
+      color: #fff;
+      font-size: 11px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    }
+    .cc-uc-body {
+      flex: 1;
+      padding: 5px 8px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .cc-uc-body:hover {
+      background: rgba(127,127,127,0.05);
+      border-color: rgba(127,127,127,0.08);
+    }
+    .cc-uc-text {
+      flex: 1;
+      min-width: 0;
+    }
+    .cc-uc-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.1px;
+    }
+    .cc-uc-source {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 1px;
+    }
+    .cc-uc-time {
+      font-size: 10px;
+      color: var(--text-faint);
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+
+    /* Footer heart link */
+    .cc-heart-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--text-dim);
+      font-size: 13px;
+      text-decoration: none;
+      transition: color 0.2s;
+      margin-top: 4px;
+    }
+    .cc-heart-link:hover { color: #e91e63; }
+
+    /* Responsive for hero composition */
+    @media (max-width: 900px) {
+      .cc-bg-card-left, .cc-bg-card-right {
+        display: none;
+      }
+      .cc-main-card-wrap {
+        width: 100%;
+        max-width: 520px;
+      }
+      .cc-usecase-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 640px) {
+      .cc-hero-composition {
+        min-height: auto;
+      }
+      .cc-main-card-wrap {
+        transform: none;
+      }
+      .cc-main-card-wrap:hover {
+        transform: none;
+      }
+    }
+
+
+    /* Image-based hero cards */
+    .cc-bg-card-left img,
+    .cc-bg-card-right img {
+      width: 100%;
+      border-radius: var(--radius);
+      display: block;
+    }
+    .cc-main-card-wrap img {
+      width: 100%;
+      border-radius: var(--radius);
+      display: block;
+    }
+    .cc-hero-img {
+      box-shadow: 0 4px 32px rgba(0,0,0,0.2);
+    }
+
+    /* Use case image wraps */
+    .cc-usecase-img-wrap {
+      padding: 0;
+      overflow: hidden;
+    }
+    .cc-usecase-img-wrap img {
+      width: 100%;
+      display: block;
+    }
+
+    /* Additional showcase row */
+    .cc-showcase-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    .cc-showcase-item {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .cc-showcase-item:hover {
+      transform: translateY(-4px);
+      border-color: color-mix(in srgb, var(--blue) 30%, var(--border));
+      box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+    }
+    .cc-showcase-img-wrap img {
+      width: 100%;
+      display: block;
+    }
+    .cc-showcase-caption {
+      padding: 16px 20px;
+    }
+    .cc-showcase-caption h4 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .cc-showcase-caption p {
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+
+    @media (max-width: 900px) {
+      .cc-showcase-row { grid-template-columns: 1fr; }
+    }
+
+    /* MDI SVG icons inside icon wraps */
+    .cc-icon-wrap svg, .cc-uc-icon svg, .cc-group-icon-wrap svg,
+    .source-icon svg, .cc-dialog-icon svg { display: block; flex-shrink: 0; }
+    .cc-thumbnail svg { display: block; opacity: 0.5; }
+    .source-tab svg { display: inline-block; vertical-align: -2px; margin-right: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- MDI Icon Sprites -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="i-person" viewBox="0 0 24 24"><path fill="currentColor" d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z"/></symbol>
+  <symbol id="i-door" viewBox="0 0 24 24"><path fill="currentColor" d="M12,3C10.89,3 10,3.89 10,5H3V19H2V21H22V19H21V5C21,3.89 20.11,3 19,3H12M12,5H19V19H12V5M5,11H7V13H5V11Z"/></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24"><path fill="currentColor" d="M5,11L6.5,6.5H17.5L19,11M17.5,16A1.5,1.5 0 0,1 16,14.5A1.5,1.5 0 0,1 17.5,13A1.5,1.5 0 0,1 19,14.5A1.5,1.5 0 0,1 17.5,16M6.5,16A1.5,1.5 0 0,1 5,14.5A1.5,1.5 0 0,1 6.5,13A1.5,1.5 0 0,1 8,14.5A1.5,1.5 0 0,1 6.5,16M18.92,6C18.72,5.42 18.16,5 17.5,5H6.5C5.84,5 5.28,5.42 5.08,6L3,12V20A1,1 0 0,0 4,21H5A1,1 0 0,0 6,20V19H18V20A1,1 0 0,0 19,21H20A1,1 0 0,0 21,20V12L18.92,6Z"/></symbol>
+  <symbol id="i-runner" viewBox="0 0 24 24"><path fill="currentColor" d="M16.5,5.5A2,2 0 0,0 18.5,3.5A2,2 0 0,0 16.5,1.5A2,2 0 0,0 14.5,3.5A2,2 0 0,0 16.5,5.5M12.9,19.4L13.9,15L16,17V23H18V15.5L15.9,13.5L16.5,10.5C17.89,12.09 19.89,13 22,13V11C20.24,11.03 18.6,10.11 17.7,8.6L16.7,7C16.34,6.4 15.7,6 15,6C14.7,6 14.5,6.1 14.2,6.1L9,8.3V13H11V9.6L12.8,8.9L11.2,17L6.3,16L5.9,18L12.9,19.4M4,9A1,1 0 0,1 3,8A1,1 0 0,1 4,7H7V9H4M5,5A1,1 0 0,1 4,4A1,1 0 0,1 5,3H10V5H5M3,13A1,1 0 0,1 2,12A1,1 0 0,1 3,11H7V13H3Z"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><path fill="currentColor" d="M19,19H5V8H19M16,1V3H8V1H6V3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3H18V1M17,12H12V17H17V12Z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><path fill="currentColor" d="M12,17A2,2 0 0,0 14,15C14,13.89 13.1,13 12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17M18,8A2,2 0 0,1 20,10V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V10C4,8.89 4.9,8 6,8H7V6A5,5 0 0,1 12,1A5,5 0 0,1 17,6V8H18M12,3A3,3 0 0,0 9,6V8H15V6A3,3 0 0,0 12,3Z"/></symbol>
+  <symbol id="i-motion" viewBox="0 0 24 24"><path fill="currentColor" d="M10,0.2C9,0.2 8.2,1 8.2,2C8.2,3 9,3.8 10,3.8C11,3.8 11.8,3 11.8,2C11.8,1 11,0.2 10,0.2M15.67,1A7.33,7.33 0 0,0 23,8.33V7A6,6 0 0,1 17,1H15.67M18.33,1C18.33,3.58 20.42,5.67 23,5.67V4.33C21.16,4.33 19.67,2.84 19.67,1H18.33M21,1A2,2 0 0,0 23,3V1H21M7.92,4.03C7.75,4.03 7.58,4.06 7.42,4.11L2,5.8V11H3.8V7.33L5.91,6.67L2,22H3.8L6.67,13.89L9,17V22H10.8V15.59L8.31,11.05L9.04,8.18L10.12,10H15V8.2H11.38L9.38,4.87C9.08,4.37 8.54,4.03 7.92,4.03Z"/></symbol>
+  <symbol id="i-package" viewBox="0 0 24 24"><path fill="currentColor" d="M21,16.5C21,16.88 20.79,17.21 20.47,17.38L12.57,21.82C12.41,21.94 12.21,22 12,22C11.79,22 11.59,21.94 11.43,21.82L3.53,17.38C3.21,17.21 3,16.88 3,16.5V7.5C3,7.12 3.21,6.79 3.53,6.62L11.43,2.18C11.59,2.06 11.79,2 12,2C12.21,2 12.41,2.06 12.57,2.18L20.47,6.62C20.79,6.79 21,7.12 21,7.5V16.5M12,4.15L10.11,5.22L16,8.61L17.96,7.5L12,4.15M6.04,7.5L12,10.85L13.96,9.75L8.08,6.35L6.04,7.5M5,15.91L11,19.29V12.58L5,9.21V15.91M19,15.91V9.21L13,12.58V19.29L19,15.91Z"/></symbol>
+  <symbol id="i-thermo" viewBox="0 0 24 24"><path fill="currentColor" d="M15 13V5A3 3 0 0 0 9 5V13A5 5 0 1 0 15 13M12 4A1 1 0 0 1 13 5V8H11V5A1 1 0 0 1 12 4Z"/></symbol>
+  <symbol id="i-dog" viewBox="0 0 24 24"><path fill="currentColor" d="M18,4C16.29,4 15.25,4.33 14.65,4.61C13.88,4.23 13,4 12,4C11,4 10.12,4.23 9.35,4.61C8.75,4.33 7.71,4 6,4C3,4 1,12 1,14C1,14.83 2.32,15.59 4.14,15.9C4.78,18.14 7.8,19.85 11.5,20V15.72C10.91,15.35 10,14.68 10,14C10,13 12,13 12,13C12,13 14,13 14,14C14,14.68 13.09,15.35 12.5,15.72V20C16.2,19.85 19.22,18.14 19.86,15.9C21.68,15.59 23,14.83 23,14C23,12 21,4 18,4M4.15,13.87C3.65,13.75 3.26,13.61 3,13.5C3.25,10.73 5.2,6.4 6.05,6C6.59,6 7,6.06 7.37,6.11C5.27,8.42 4.44,12.04 4.15,13.87M9,12A1,1 0 0,1 8,11C8,10.46 8.45,10 9,10A1,1 0 0,1 10,11C10,11.56 9.55,12 9,12M15,12A1,1 0 0,1 14,11C14,10.46 14.45,10 15,10A1,1 0 0,1 16,11C16,11.56 15.55,12 15,12M19.85,13.87C19.56,12.04 18.73,8.42 16.63,6.11C17,6.06 17.41,6 17.95,6C18.8,6.4 20.75,10.73 21,13.5C20.75,13.61 20.36,13.75 19.85,13.87Z"/></symbol>
+  <symbol id="i-cctv" viewBox="0 0 24 24"><path fill="currentColor" d="M6.03 12.03L8.03 15.5L5.5 18.68L2 12.62L6.03 12.03M17 18V15.29C17.88 14.9 18.5 14.03 18.5 13C18.5 12.43 18.3 11.9 17.97 11.5L19.94 10.35C20.95 9.76 21.3 8.47 20.71 7.46L19.33 5.06C18.74 4.05 17.45 3.7 16.44 4.28L8.31 9C7.36 9.53 7.03 10.75 7.58 11.71L9.08 14.31C9.63 15.26 10.86 15.59 11.81 15.04L13.69 13.96C13.94 14.55 14.41 15.03 15 15.29V18C15 19.1 15.9 20 17 20H22V18H17Z"/></symbol>
+  <symbol id="i-bulb" viewBox="0 0 24 24"><path fill="currentColor" d="M12,2A7,7 0 0,0 5,9C5,11.47 6.19,13.64 8,14.93V18H16V14.93C17.81,13.64 19,11.47 19,9A7,7 0 0,0 12,2M14.85,13.36L14,14V16H10V14L9.15,13.36C7.8,12.36 7,10.73 7,9A5,5 0 0,1 12,4A5,5 0 0,1 17,9C17,10.73 16.2,12.36 14.85,13.36M8,20V19H16V20A2,2 0 0,1 14,22H10A2,2 0 0,1 8,20Z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path fill="currentColor" d="M11,13H13V16H16V11H18L12,6L6,11H8V16H11V13M12,1L21,5V11C21,16.55 17.16,21.74 12,23C6.84,21.74 3,16.55 3,11V5L12,1Z"/></symbol>
+  <symbol id="i-garage" viewBox="0 0 24 24"><path fill="currentColor" d="M19,20H17V11H7V20H5V9L12,5L19,9V20M8,12H16V14H8V12M8,15H16V17H8V15M16,18V20H8V18H16Z"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path fill="currentColor" d="M4,4H7L9,2H15L17,4H20A2,2 0 0,1 22,6V18A2,2 0 0,1 20,20H4A2,2 0 0,1 2,18V6A2,2 0 0,1 4,4M12,7A5,5 0 0,0 7,12A5,5 0 0,0 12,17A5,5 0 0,0 17,12A5,5 0 0,0 12,7M12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9Z"/></symbol>
+  <symbol id="i-api" viewBox="0 0 24 24"><path fill="currentColor" d="M21,3H3A2,2 0 0,0 1,5V19A2,2 0 0,0 3,21H21A2,2 0 0,0 23,19V5A2,2 0 0,0 21,3M21,19H3V5H21V19M6,13H10V15H6V13M12,13H18V15H12V13M6,9H18V11H6V9Z"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path fill="currentColor" d="M13.5,8H12V13L16.28,15.54L17,14.33L13.5,12.25V8M13,3A9,9 0 0,0 4,12H1L4.96,16.03L9,12H6A7,7 0 0,1 13,5A7,7 0 0,1 20,12A7,7 0 0,1 13,19C11.07,19 9.32,18.21 8.06,16.94L6.64,18.36C8.27,20 10.5,21 13,21A9,9 0 0,0 22,12A9,9 0 0,0 13,3Z"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path fill="currentColor" d="M13,9V3.5L18.5,9M6,2C4.89,2 4,2.89 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2H6Z"/></symbol>
+  <symbol id="i-logbook" viewBox="0 0 24 24"><path fill="currentColor" d="M3,7V5H5V4C5,2.89 5.9,2 7,2H13V9L15.5,7.5L18,9V2H19C20.05,2 21,2.95 21,4V20C21,21.05 20.05,22 19,22H7C5.95,22 5,21.05 5,20V19H3V17H5V13H3V11H5V7H3M7,11H5V13H7V11M7,7V5H5V7H7M7,19V17H5V19H7Z"/></symbol>
+</svg>
+
+
+  <!-- HEADER -->
+  <header id="header">
+    <a href="#" class="logo">
+      <svg viewBox="0 0 28 28" fill="none">
+        <rect width="28" height="28" rx="7" fill="var(--blue)" opacity="0.1"/>
+        <line x1="9" y1="6" x2="9" y2="22" stroke="var(--blue)" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="9" cy="9" r="2.5" fill="var(--orange)"/>
+        <circle cx="9" cy="16" r="2.5" fill="var(--blue)"/>
+        <circle cx="9" cy="22" r="2.5" fill="var(--purple)"/>
+        <rect x="14" y="8" width="10" height="2" rx="1" fill="var(--text-faint)"/>
+        <rect x="14" y="15" width="8" height="2" rx="1" fill="var(--text-faint)"/>
+      </svg>
+      Chronicle<span class="logo-dot">.</span>
+    </a>
+    <nav>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#sources">Sources</a></li>
+        <li><a href="#usecases">Use Cases</a></li>
+        <li><a href="#install">Install</a></li>
+        <li><a href="documentation.html">Docs</a></li>
+        <li><a href="#faq">FAQ</a></li>
+      </ul>
+    </nav>
+    <div class="nav-right">
+      <span class="version-badge">v1.13.0</span>
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      </button>
+      <a href="#install" class="btn-get-started">Get Started</a>
+      <button class="mobile-menu-btn" onclick="document.querySelector('.mobile-nav').classList.add('open')" aria-label="Menu">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- MOBILE NAV -->
+  <div class="mobile-nav">
+    <button class="mobile-nav-close" onclick="this.parentElement.classList.remove('open')">✕</button>
+    <a href="#features" onclick="this.parentElement.classList.remove('open')">Features</a>
+    <a href="#sources" onclick="this.parentElement.classList.remove('open')">Sources</a>
+    <a href="#usecases" onclick="this.parentElement.classList.remove('open')">Use Cases</a>
+    <a href="#install" onclick="this.parentElement.classList.remove('open')">Install</a>
+    <a href="documentation.html" onclick="this.parentElement.classList.remove('open')">Docs</a>
+    <a href="#faq" onclick="this.parentElement.classList.remove('open')">FAQ</a>
+  </div>
+
+  <!-- HERO -->
+  <section class="hero" id="hero">
+    <div class="hero-glow"></div>
+    <div class="hero-badge">
+      <span class="hero-badge-dot"></span>
+      Now in the HACS Default Store &middot; One-click install
+    </div>
+    <h1>Every Event.<br><span class="gradient-text">One Timeline.</span></h1>
+    <p>A timeline card for Home Assistant that merges calendars, cameras, door sensors, and APIs into one view.</p>
+    <div class="hero-ctas">
+      <a href="#install" class="cta-primary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Install Now
+      </a>
+      <a href="https://github.com/KadenThomp36/chronicle-card" class="cta-secondary" target="_blank" rel="noopener">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        View on GitHub
+      </a>
+    </div>
+
+    <!-- Showcase Composition -->
+    <div class="cc-hero-composition">
+      <div class="cc-bg-card-left">
+        <img src="images/hero-security.png" alt="Security timeline" draggable="false">
+      </div>
+      <div class="cc-bg-card-right">
+        <img src="images/hero-cameras.png" alt="Camera timeline" draggable="false">
+      </div>
+      <div class="cc-main-card-wrap">
+        <img src="images/hero-main.png" alt="Chronicle Card — Home Timeline" class="cc-hero-img" draggable="false">
+      </div>
+    </div>
+
+  </section>
+
+  <!-- FEATURES BENTO -->
+  <section id="features">
+    <div class="section-header center">
+      <div class="section-label reveal">Features</div>
+      <h2 class="section-title reveal reveal-delay-1">What it does</h2>
+      <p class="section-subtitle reveal reveal-delay-2">Merge events from any source — calendars, cameras, sensors, APIs — into a single, unified timeline view.</p>
+    </div>
+
+    <div class="bento-grid">
+      <div class="bento-card span-2 reveal">
+        <div class="bento-icon" style="background:rgba(33,150,243,0.12);color:var(--blue)">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+        </div>
+        <h3>Universal Sources</h3>
+        <p>5 built-in adapters pull events from calendars, REST APIs, WebSocket commands, entity state history, HA logbook entries, and static YAML — all merging into one view.</p>
+        <div class="source-icons">
+          <div class="source-icon" title="Calendar" style="color:var(--blue)"><svg width="18" height="18" style="display:block;flex-shrink:0"><use href="#i-calendar"/></svg></div>
+          <div class="source-icon" title="REST API" style="color:var(--orange)"><svg width="18" height="18" style="display:block;flex-shrink:0"><use href="#i-api"/></svg></div>
+          <div class="source-icon" title="History" style="color:var(--purple)"><svg width="18" height="18" style="display:block;flex-shrink:0"><use href="#i-history"/></svg></div>
+          <div class="source-icon" title="Static YAML" style="color:var(--green)"><svg width="18" height="18" style="display:block;flex-shrink:0"><use href="#i-file"/></svg></div>
+          <div class="source-icon" title="Logbook" style="color:var(--teal)"><svg width="18" height="18" style="display:block;flex-shrink:0"><use href="#i-logbook"/></svg></div>
+          <div class="source-icon" title="Frigate" style="color:var(--red)"><svg width="18" height="18" style="display:block;flex-shrink:0"><use href="#i-cctv"/></svg></div>
+        </div>
+      </div>
+      <div class="bento-card reveal reveal-delay-1">
+        <div class="bento-icon" style="background:rgba(255,152,0,0.12);color:var(--orange)">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        </div>
+        <h3>Smart Icons & Colors</h3>
+        <p>150+ built-in keyword rules match event titles to Material Design icons and colors. "Dog detected" → 🐕, "Door opened" → 🚪. Works out of the box.</p>
+      </div>
+      <div class="bento-card reveal reveal-delay-1">
+        <div class="bento-icon" style="background:rgba(156,39,176,0.12);color:var(--purple)">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+        </div>
+        <h3>Event Grouping</h3>
+        <p>Clusters rapid-fire events into expandable groups. 10 motion alerts in 2 minutes become one collapsible entry.</p>
+      </div>
+      <div class="bento-card reveal reveal-delay-2">
+        <div class="bento-icon" style="background:rgba(0,188,212,0.12);color:var(--teal)">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        </div>
+        <h3>Visual Editor</h3>
+        <p>Full GUI configuration right inside the HA dashboard editor. Add sources, tweak appearance, configure filters — no YAML required.</p>
+      </div>
+      <div class="bento-card reveal reveal-delay-2">
+        <div class="bento-icon" style="background:rgba(255,87,34,0.12);color:#FF5722">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="2"/><circle cx="8" cy="8" r="2"/><path d="M21 15l-5-5L5 21"/></svg>
+        </div>
+        <h3>Thumbnails</h3>
+        <p>Camera snapshots, Frigate images, or any URL render inline as event thumbnails with media URL caching. The detail dialog even plays video clips (mp4, webm, HLS, or a <code>clip_url_template</code>) inline.</p>
+      </div>
+      <div class="bento-card reveal reveal-delay-3">
+        <div class="bento-icon" style="background:rgba(67,160,71,0.12);color:var(--green)">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+        </div>
+        <h3>9 Languages</h3>
+        <p>Auto-detects your HA locale. Override manually if you prefer.</p>
+        <div class="lang-flags">
+          <span class="lang-flag" title="English">🇬🇧</span>
+          <span class="lang-flag" title="German">🇩🇪</span>
+          <span class="lang-flag" title="French">🇫🇷</span>
+          <span class="lang-flag" title="Spanish">🇪🇸</span>
+          <span class="lang-flag" title="Italian">🇮🇹</span>
+          <span class="lang-flag" title="Portuguese">🇵🇹</span>
+          <span class="lang-flag" title="Dutch">🇳🇱</span>
+          <span class="lang-flag" title="Swedish">🇸🇪</span>
+          <span class="lang-flag" title="Polish">🇵🇱</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SOURCE ADAPTERS -->
+  <section id="sources" class="source-section">
+    <div class="section-header reveal">
+      <div class="section-label">Sources</div>
+      <h2 class="section-title">Five source adapters</h2>
+      <p class="section-subtitle">Each adapter connects to a different type of event source. Mix and match freely — they all merge into one timeline.</p>
+    </div>
+
+    <div class="source-tabs reveal reveal-delay-1">
+      <button class="source-tab active" data-tab="calendar"><svg width="16" height="16" style="display:block;flex-shrink:0"><use href="#i-calendar"/></svg> Calendar</button>
+      <button class="source-tab" data-tab="rest"><svg width="16" height="16" style="display:block;flex-shrink:0"><use href="#i-api"/></svg> REST / WS</button>
+      <button class="source-tab" data-tab="history"><svg width="16" height="16" style="display:block;flex-shrink:0"><use href="#i-history"/></svg> History</button>
+      <button class="source-tab" data-tab="static"><svg width="16" height="16" style="display:block;flex-shrink:0"><use href="#i-file"/></svg> Static</button>
+      <button class="source-tab" data-tab="logbook"><svg width="16" height="16" style="display:block;flex-shrink:0"><use href="#i-logbook"/></svg> Logbook</button>
+    </div>
+
+    <!-- Calendar Tab -->
+    <div class="source-content active" id="tab-calendar">
+      <div class="source-info">
+        <h3>Calendar Entities</h3>
+        <p>Point Chronicle at any Home Assistant calendar entity and it pulls events automatically. Works with local calendars, Google Calendar, CalDAV, and more.</p>
+        <ul class="source-features">
+          <li>Fetches events for configurable date range</li>
+          <li>Automatic icon and color inference from event titles</li>
+          <li>Push events from automations using <code>calendar.create_event</code></li>
+          <li>Includes a ready-to-use automation blueprint</li>
+        </ul>
+      </div>
+      <div class="code-block">
+        <div class="code-header">
+          <span>configuration.yaml</span>
+          <button class="code-copy" onclick="copyCode(this)">Copy</button>
+        </div>
+        <div class="code-body"><span class="key">type</span>: <span class="str">custom:chronicle-card</span>
+<span class="key">title</span>: <span class="str">Family Calendar</span>
+<span class="key">sources</span>:
+  - <span class="key">type</span>: <span class="str">calendar</span>
+    <span class="key">entity</span>: <span class="str">calendar.family</span>
+    <span class="key">default_icon</span>: <span class="str">mdi:calendar</span>
+    <span class="key">default_color</span>: <span class="str">"#4CAF50"</span></div>
+      </div>
+    </div>
+
+    <!-- REST Tab -->
+    <div class="source-content" id="tab-rest">
+      <div class="source-info">
+        <h3>REST & WebSocket APIs</h3>
+        <p>Connect to any REST API or HA WebSocket command. First-class Frigate support via WebSocket — see camera events with thumbnails in your timeline.</p>
+        <ul class="source-features">
+          <li>Field mapping transforms any JSON schema into Chronicle events</li>
+          <li>Media URL templates with placeholder substitution</li>
+          <li>Configurable poll interval for real-time updates</li>
+          <li>Internal HA paths use authenticated <code>callApi</code></li>
+        </ul>
+      </div>
+      <div class="code-block">
+        <div class="code-header">
+          <span>Frigate example</span>
+          <button class="code-copy" onclick="copyCode(this)">Copy</button>
+        </div>
+        <div class="code-body"><span class="key">sources</span>:
+  - <span class="key">type</span>: <span class="str">rest</span>
+    <span class="key">name</span>: <span class="str">Frigate Events</span>
+    <span class="key">ws_params</span>:
+      <span class="key">type</span>: <span class="str">frigate/events/get</span>
+      <span class="key">limit</span>: <span class="num">50</span>
+    <span class="key">field_map</span>:
+      <span class="key">id</span>: <span class="str">id</span>
+      <span class="key">title</span>: <span class="str">label</span>
+      <span class="key">start</span>: <span class="str">start_time</span>
+      <span class="key">category</span>: <span class="str">label</span>
+    <span class="key">media_url_template</span>: <span class="str">/api/frigate/notifications/{id}/snapshot.jpg</span></div>
+      </div>
+    </div>
+
+    <!-- History Tab -->
+    <div class="source-content" id="tab-history">
+      <div class="source-info">
+        <h3>Entity State History</h3>
+        <p>Converts raw state changes into human-readable timeline events. A binary_sensor with device_class "door" becomes "Front Door Opened" / "Front Door Closed" automatically.</p>
+        <ul class="source-features">
+          <li>Reads device_class for smart translations (door, motion, lock, smoke, etc.)</li>
+          <li>Per-entity config: name, icon, color, severity, and state filter overrides</li>
+          <li>Jinja2 <code>image_template</code> for dynamic thumbnails per event</li>
+          <li>Native <code>tap_action</code> / <code>hold_action</code> (more-info, navigate, call-service)</li>
+        </ul>
+      </div>
+      <div class="code-block">
+        <div class="code-header">
+          <span>Security sensors</span>
+          <button class="code-copy" onclick="copyCode(this)">Copy</button>
+        </div>
+        <div class="code-body"><span class="key">sources</span>:
+  - <span class="key">type</span>: <span class="str">history</span>
+    <span class="key">entity</span>: <span class="str">binary_sensor.front_door</span>
+    <span class="key">name</span>: <span class="str">Security</span>
+    <span class="key">default_severity</span>: <span class="str">warning</span>
+    <span class="key">entity_config</span>:
+      <span class="key">lock.front_door_lock</span>:
+        <span class="key">name</span>: <span class="str">Front Lock</span>
+      <span class="key">alarm_control_panel.home</span>:
+        <span class="key">name</span>: <span class="str">Alarm</span></div>
+      </div>
+    </div>
+
+    <!-- Static Tab -->
+    <div class="source-content" id="tab-static">
+      <div class="source-info">
+        <h3>Static YAML Events</h3>
+        <p>Define events directly in your card configuration. Perfect for scheduled reminders, maintenance tasks, or any manually curated entries.</p>
+        <ul class="source-features">
+          <li>Full control over icon, color, severity, and category</li>
+          <li>Great for maintenance schedules and reminders</li>
+          <li>Mix with dynamic sources for a complete picture</li>
+          <li>No external dependencies needed</li>
+        </ul>
+      </div>
+      <div class="code-block">
+        <div class="code-header">
+          <span>Reminders</span>
+          <button class="code-copy" onclick="copyCode(this)">Copy</button>
+        </div>
+        <div class="code-body"><span class="key">sources</span>:
+  - <span class="key">type</span>: <span class="str">static</span>
+    <span class="key">name</span>: <span class="str">Maintenance</span>
+    <span class="key">events</span>:
+      - <span class="key">title</span>: <span class="str">Change HVAC Filter</span>
+        <span class="key">start</span>: <span class="str">"2025-04-01T10:00:00"</span>
+        <span class="key">icon</span>: <span class="str">mdi:air-filter</span>
+        <span class="key">severity</span>: <span class="str">info</span></div>
+      </div>
+    </div>
+
+    <!-- Logbook Tab -->
+    <div class="source-content" id="tab-logbook">
+      <div class="source-info">
+        <h3>Logbook Entries</h3>
+        <p>Pulls Home Assistant logbook entries into the timeline — including automation and script triggers that fire and return to idle in milliseconds, too fast for the history database to record.</p>
+        <ul class="source-features">
+          <li>Captures fast automation and script triggers the history source misses</li>
+          <li>Per-entity config: name, icon, color, severity, and action overrides</li>
+          <li>Poll-based updates (default 30s interval)</li>
+          <li>Mix with history sources for full coverage</li>
+        </ul>
+      </div>
+      <div class="code-block">
+        <div class="code-header">
+          <span>Automation triggers</span>
+          <button class="code-copy" onclick="copyCode(this)">Copy</button>
+        </div>
+        <div class="code-body"><span class="key">sources</span>:
+  - <span class="key">type</span>: <span class="str">logbook</span>
+    <span class="key">name</span>: <span class="str">Noise Alerts</span>
+    <span class="key">entities</span>:
+      - <span class="str">automation.noise_above_30db</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- EASY TO USE -->
+  <section>
+    <div class="easy-section reveal">
+      <div class="easy-text">
+        <div class="section-label">Quick Start</div>
+        <h2>Three lines.<br>That's it.</h2>
+        <p>Add a chronicle card to any dashboard with a minimal YAML config. Icons, colors, grouping, and layout are handled automatically. Or use the built-in visual editor instead.</p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <div class="severity-row">
+            <span class="severity-pill" style="background:rgba(211,47,47,0.15);color:var(--red)">Critical</span>
+            <span class="severity-pill" style="background:rgba(255,152,0,0.15);color:var(--orange)">Warning</span>
+            <span class="severity-pill" style="background:rgba(33,150,243,0.15);color:var(--blue)">Info</span>
+            <span class="severity-pill" style="background:rgba(158,158,158,0.15);color:var(--grey)">Debug</span>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+        <div class="code-header">
+          <span>Minimal config</span>
+          <button class="code-copy" onclick="copyCode(this)">Copy</button>
+        </div>
+        <div class="code-body"><span class="key">type</span>: <span class="str">custom:chronicle-card</span>
+<span class="key">title</span>: <span class="str">Home Timeline</span>
+<span class="key">sources</span>:
+  - <span class="key">type</span>: <span class="str">calendar</span>
+    <span class="key">entity</span>: <span class="str">calendar.home_events</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- USE CASES -->
+  <section id="usecases">
+    <div class="section-header center reveal">
+      <div class="section-label">Use Cases</div>
+      <h2 class="section-title">From cameras to calendars</h2>
+      <p class="section-subtitle">A few examples of how Chronicle Card works across different setups.</p>
+    </div>
+
+    <div class="cc-usecase-grid">
+
+      <!-- Security -->
+      <div class="cc-usecase-item reveal">
+        <div class="cc-usecase-card-wrap">
+          <div class="cc-usecase-glow" style="background:radial-gradient(circle, rgba(211,47,47,0.4), transparent 70%);"></div>
+          <div class="cc-usecase-inner">
+            <div class="cc-usecase-label">
+              <span class="cc-usecase-tag" style="background:rgba(211,47,47,0.12);color:#D32F2F;">Security</span>
+            </div>
+            <div class="cc-usecase-img-wrap">
+              <img src="images/usecase-security.png" alt="Security timeline" loading="lazy">
+            </div>
+            <div class="cc-usecase-info">
+              <h3>Security Timeline</h3>
+              <p>Track every door, lock, motion sensor, and alarm event. Filter by severity to focus on what matters.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cameras -->
+      <div class="cc-usecase-item reveal reveal-delay-1">
+        <div class="cc-usecase-card-wrap">
+          <div class="cc-usecase-glow" style="background:radial-gradient(circle, rgba(33,150,243,0.4), transparent 70%);"></div>
+          <div class="cc-usecase-inner">
+            <div class="cc-usecase-label">
+              <span class="cc-usecase-tag" style="background:rgba(33,150,243,0.12);color:#2196F3;">Cameras</span>
+            </div>
+            <div class="cc-usecase-img-wrap">
+              <img src="images/usecase-cameras.png" alt="Camera detection timeline" loading="lazy">
+            </div>
+            <div class="cc-usecase-info">
+              <h3>Frigate Camera Events</h3>
+              <p>Frigate detections flow in via WebSocket with thumbnails. Person, vehicle, pet &mdash; all auto-categorized.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Multi-Source -->
+      <div class="cc-usecase-item reveal reveal-delay-2">
+        <div class="cc-usecase-card-wrap">
+          <div class="cc-usecase-glow" style="background:radial-gradient(circle, rgba(67,160,71,0.4), transparent 70%);"></div>
+          <div class="cc-usecase-inner">
+            <div class="cc-usecase-label">
+              <span class="cc-usecase-tag" style="background:rgba(67,160,71,0.12);color:#43A047;">Multi-Source</span>
+            </div>
+            <div class="cc-usecase-img-wrap">
+              <img src="images/usecase-multisource.png" alt="Multi-source timeline" loading="lazy">
+            </div>
+            <div class="cc-usecase-info">
+              <h3>Smart Home Hub</h3>
+              <p>Combine calendars, cameras, sensors, and static events into one unified timeline view.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Additional Showcase -->
+    <div class="cc-showcase-row reveal" style="margin-top:48px;">
+      <div class="cc-showcase-item">
+        <div class="cc-showcase-img-wrap">
+          <img src="images/horizontal-layout.png" alt="Horizontal layout" loading="lazy">
+        </div>
+        <div class="cc-showcase-caption">
+          <h4>Horizontal Layout</h4>
+          <p>Switch to a scrollable card grid for a compact, media-rich view.</p>
+        </div>
+      </div>
+      <div class="cc-showcase-item">
+        <div class="cc-showcase-img-wrap">
+          <img src="images/detail-dialog.png" alt="Event detail dialog" loading="lazy">
+        </div>
+        <div class="cc-showcase-caption">
+          <h4>Event Details</h4>
+          <p>Click any event to see full metadata, camera snapshots, inline video clips, and source info.</p>
+        </div>
+      </div>
+      <div class="cc-showcase-item">
+        <div class="cc-showcase-img-wrap">
+          <img src="images/visual-editor.png" alt="Visual editor" loading="lazy">
+        </div>
+        <div class="cc-showcase-caption">
+          <h4>Visual Editor</h4>
+          <p>Configure sources, filters, grouping, and appearance — no YAML needed.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INSTALL -->
+  <section id="install">
+    <div class="section-header center reveal">
+      <div class="section-label">Installation</div>
+      <h2 class="section-title">Up and running<br>in 60 seconds</h2>
+    </div>
+
+    <div class="install-grid">
+      <div class="install-card install-highlight reveal">
+        <h3>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          HACS
+          <span class="pending-badge">Recommended</span>
+        </h3>
+        <p>Chronicle Card is in the HACS default store. Click below to open the repository inside your HACS instance.</p>
+        <p style="margin: 8px 0 16px;"><a href="https://my.home-assistant.io/redirect/hacs_repository/?owner=KadenThomp36&amp;repository=chronicle-card&amp;category=plugin" target="_blank" rel="noopener"><img src="https://my.home-assistant.io/badges/hacs_repository.svg" alt="Open this repository in HACS." style="height:36px;"></a></p>
+        <ol class="install-steps">
+          <li><span>Open <strong>HACS</strong> in your Home Assistant instance</span></li>
+          <li><span>Search for <strong>Chronicle Card</strong> and click <strong>Download</strong></span></li>
+          <li>
+            <span>Go to <strong>Settings → Dashboards → Resources</strong>, click <strong>Add</strong>, and enter the resource URL as <strong>JavaScript Module</strong>
+              <span class="copy-url-wrap">
+                <code id="resource-url">/hacsfiles/chronicle-card/chronicle-card.js</code>
+                <button class="copy-btn" onclick="copyUrl(this, 'resource-url')" title="Copy resource URL">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+              </span>
+            </span>
+          </li>
+          <li><span>Restart Home Assistant and add the card to any dashboard</span></li>
+        </ol>
+      </div>
+      <div class="install-card reveal reveal-delay-1">
+        <h3>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" stroke-width="2" stroke-linecap="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          Manual Install
+        </h3>
+        <p>For those who prefer full control.</p>
+        <ol class="install-steps">
+          <li><span>Download <code>chronicle-card.js</code> from the <a href="https://github.com/KadenThomp36/chronicle-card/releases" style="color:var(--blue)">latest release</a></span></li>
+          <li><span>Copy to <code>/config/www/chronicle-card.js</code></span></li>
+          <li><span>Go to <strong>Settings → Dashboards → Resources</strong></span></li>
+          <li>
+            <span>Add resource as JavaScript Module:
+              <span class="copy-url-wrap">
+                <code id="resource-path">/local/chronicle-card.js</code>
+                <button class="copy-btn" onclick="copyUrl(this, 'resource-path')" title="Copy path">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+              </span>
+            </span>
+          </li>
+          <li><span>Add the card to your dashboard</span></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq">
+    <div class="section-header center reveal">
+      <div class="section-label">FAQ</div>
+      <h2 class="section-title">Common questions</h2>
+    </div>
+
+    <div class="faq-list">
+      <div class="faq-item reveal">
+        <button class="faq-question" onclick="toggleFaq(this)">
+          Does it work with Frigate?
+          <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-answer">
+          <p>Yes! Chronicle has first-class Frigate support via the REST/WebSocket adapter. It connects to Frigate's WebSocket API, maps detection events to timeline entries, and renders camera snapshots as inline thumbnails. See the examples in the documentation for a ready-to-use Frigate config.</p>
+        </div>
+      </div>
+      <div class="faq-item reveal reveal-delay-1">
+        <button class="faq-question" onclick="toggleFaq(this)">
+          Do I need to write YAML?
+          <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-answer">
+          <p>No! Chronicle includes a full visual config editor that lets you add sources, configure appearance, set up filters and grouping — all through the HA dashboard editor GUI. YAML is available for advanced users but never required.</p>
+        </div>
+      </div>
+      <div class="faq-item reveal reveal-delay-2">
+        <button class="faq-question" onclick="toggleFaq(this)">
+          What HA version is required?
+          <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-answer">
+          <p>Chronicle Card requires Home Assistant 2024.1.0 or newer. It uses modern HA APIs for calendar access, history queries, and WebSocket communication that are available from that version onward.</p>
+        </div>
+      </div>
+      <div class="faq-item reveal reveal-delay-3">
+        <button class="faq-question" onclick="toggleFaq(this)">
+          Can I combine multiple sources?
+          <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-answer">
+          <p>Absolutely. You can add as many sources as you like — mix calendars, Frigate cameras, door sensors, and static events in a single card. Everything merges into one chronological timeline with proper grouping and filtering.</p>
+        </div>
+      </div>
+      <div class="faq-item reveal reveal-delay-4">
+        <button class="faq-question" onclick="toggleFaq(this)">
+          How does performance scale?
+          <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-answer">
+          <p>Chronicle uses virtual scrolling to only render visible events, debounced fetching to minimize API calls, and a media URL cache (3-hour TTL) for thumbnails. It handles hundreds of events smoothly even on lower-powered devices.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA BANNER -->
+  <section class="cta-banner reveal">
+    <h2>Ready to chronicle<br>your smart home?</h2>
+    <p>Install from HACS in seconds. Free, open source, MIT licensed.</p>
+    <div class="hero-ctas" style="margin-top:0">
+      <a href="#install" class="cta-primary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Install Now
+      </a>
+      <a href="https://github.com/KadenThomp36/chronicle-card" class="cta-secondary" target="_blank" rel="noopener">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="#" class="logo">
+          <svg viewBox="0 0 28 28" fill="none" width="28" height="28">
+            <rect width="28" height="28" rx="7" fill="var(--blue)" opacity="0.1"/>
+            <line x1="9" y1="6" x2="9" y2="22" stroke="var(--blue)" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="9" cy="9" r="2.5" fill="var(--orange)"/>
+            <circle cx="9" cy="16" r="2.5" fill="var(--blue)"/>
+            <circle cx="9" cy="22" r="2.5" fill="var(--purple)"/>
+            <rect x="14" y="8" width="10" height="2" rx="1" fill="var(--text-faint)"/>
+            <rect x="14" y="15" width="8" height="2" rx="1" fill="var(--text-faint)"/>
+          </svg>
+          Chronicle<span class="logo-dot">.</span>
+        </a>
+        <p>A universal timeline card for Home Assistant. Open source, community-driven, built with care.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Resources</h4>
+        <a href="documentation.html">Documentation</a>
+        <a href="https://github.com/KadenThomp36/chronicle-card/issues" target="_blank">Bug Reports</a>
+        <a href="https://github.com/KadenThomp36/chronicle-card/releases" target="_blank">Releases</a>
+        <a href="https://github.com/KadenThomp36/chronicle-card/releases.atom" target="_blank">RSS Feed</a>
+      </div>
+      <div class="footer-col">
+        <h4>Community</h4>
+        <a href="https://github.com/KadenThomp36/chronicle-card/discussions" target="_blank">Discussions</a>
+        <a href="https://community.home-assistant.io/" target="_blank">HA Community</a>
+      </div>
+      <div class="footer-col">
+        <h4>Support</h4>
+        <a href="https://buymeacoffee.com/kadenthomp36" target="_blank">Buy Me a Coffee</a>
+        <a href="https://buymeacoffee.com/kadenthomp36" target="_blank" class="cc-heart-link" rel="noopener">&hearts; Support this project</a>
+        <a href="https://github.com/KadenThomp36/chronicle-card/blob/main/LICENSE" target="_blank">MIT License</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; <span id="year"></span> Chronicle Card. MIT License.</span>
+      <div class="footer-socials">
+        <a href="https://github.com/KadenThomp36/chronicle-card" target="_blank" aria-label="GitHub">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        </a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Theme toggle
+    function toggleTheme() {
+      document.documentElement.classList.toggle('dark');
+      document.documentElement.classList.toggle('light');
+      localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+    }
+    // Restore theme
+    const saved = localStorage.getItem('theme');
+    if (saved === 'light') {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.add('light');
+    } else if (!saved && window.matchMedia('(prefers-color-scheme: light)').matches) {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.add('light');
+    }
+
+    // Scroll reveal
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); } });
+    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+    // Header scroll
+    window.addEventListener('scroll', () => {
+      document.getElementById('header').classList.toggle('header-scrolled', window.scrollY > 20);
+    });
+
+    // Active nav link
+    const sections = document.querySelectorAll('section[id]');
+    const navLinks = document.querySelectorAll('.nav-links a');
+    window.addEventListener('scroll', () => {
+      const mid = window.scrollY + window.innerHeight / 3;
+      let current = '';
+      sections.forEach(s => {
+        if (s.offsetTop <= mid) current = s.id;
+      });
+      navLinks.forEach(a => {
+        a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+      });
+    });
+
+    // Source tabs
+    document.querySelectorAll('.source-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.source-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.source-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+      });
+    });
+
+    // FAQ accordion
+    function toggleFaq(btn) {
+      const item = btn.parentElement;
+      const wasOpen = item.classList.contains('open');
+      document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+      if (!wasOpen) item.classList.add('open');
+    }
+
+    // Copy code
+    function copyCode(btn) {
+      const code = btn.closest('.code-block').querySelector('.code-body').textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = 'Copy', 2000);
+      });
+    }
+
+    function copyUrl(btn, id) {
+      const text = document.getElementById(id).textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        btn.classList.add('copied');
+        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>';
+        setTimeout(() => {
+          btn.classList.remove('copied');
+          btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+        }, 2000);
+      });
+    }
+
+    // Year
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+  </script>
+</body>
+</html>
