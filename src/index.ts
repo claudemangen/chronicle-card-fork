@@ -10,7 +10,7 @@ windowWithCards.customCards.push({
   name: 'Chronicle Card (Fork)',
   description: 'A universal, extensible timeline card for Home Assistant (fork with history clip_url_template & relative URL fix)',
   preview: true,
-  documentationURL: 'https://github.com/claudemangen/ha-chronicle-card-fork',
+  documentationURL: 'https://github.com/claudemangen/chronicle-card-fork',
 });
 
 console.info(
