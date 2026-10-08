@@ -50,7 +50,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
 
 export const CARD_VERSION = '1.13.0';
 export const CARD_NAME = 'chronicle-card-local-snaps';
-export const EDITOR_NAME = 'chronicle-card-fork-editor';
+export const EDITOR_NAME = 'chronicle-card-local-snaps-editor';
 
 export const DEFAULT_POLL_INTERVAL = 30;
 export const MEDIA_CACHE_TTL = 3 * 60 * 60 * 1000; // 3 hours
