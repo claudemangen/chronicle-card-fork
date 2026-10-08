@@ -23,7 +23,7 @@ export class ChronicleCard extends LitElement {
   private _liveSubscribed = false;
 
   static getConfigElement() {
-    return document.createElement('chronicle-card-editor');
+    return document.createElement('chronicle-card-local-snaps-editor');
   }
 
   static getStubConfig() {
