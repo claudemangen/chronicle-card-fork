@@ -16,6 +16,15 @@ export class ChronicleCard extends LitElement {
   @state() private _layout: 'vertical' | 'horizontal' = 'vertical';
   @state() private _selectedDate = '';
   @state() private _visibleDate = '';
+  @state() private _calOpen = false;
+  /** Month shown in the calendar popup, as YYYY-MM. */
+  @state() private _calMonth = '';
+  private _outsideClick = (e: Event) => {
+    if (!e.composedPath().includes(this)) {
+      this._calOpen = false;
+      document.removeEventListener('click', this._outsideClick, { capture: true } as EventListenerOptions);
+    }
+  };
 
   @query('chronicle-detail-dialog') private _dialog?: any;
 
@@ -99,6 +108,7 @@ export class ChronicleCard extends LitElement {
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
+    document.removeEventListener('click', this._outsideClick, { capture: true } as EventListenerOptions);
     this._store.unsubscribeLive();
     this._liveSubscribed = false;
     this._storeUnsub?.();
@@ -109,6 +119,7 @@ export class ChronicleCard extends LitElement {
     // the height the dashboard hands us (Panel layout, fixed-height grids).
     const h = this._config?.appearance?.card_height;
     this.toggleAttribute('fill', h === 'fill' || h === '100%');
+    this.toggleAttribute('cal-open', this._calOpen);
   }
 
   static styles = css`
@@ -121,6 +132,16 @@ export class ChronicleCard extends LitElement {
        height the dashboard gives us, e.g. Panel layout. */
     :host([fill]) {
       height: 100%;
+    }
+
+    /* Let the calendar popup overflow the card while open */
+    :host([cal-open]) {
+      contain: none;
+      position: relative;
+      z-index: 5;
+    }
+    :host([cal-open]) ha-card {
+      overflow: visible;
     }
 
     ha-card {
@@ -245,25 +266,62 @@ export class ChronicleCard extends LitElement {
       --mdc-icon-size: 15px;
       opacity: 0.7;
     }
-    /* Native input stays on top (invisible) so taps open the OS date picker */
-    .date-field input[type='date'] {
+    .date-field { font: inherit; background: transparent; }
+    .date-picker { position: relative; }
+    .cal {
       position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      opacity: 0;
-      border: 0;
-      padding: 0;
-      margin: 0;
-      cursor: pointer;
+      top: 36px;
+      right: 0;
+      z-index: 10;
+      width: 252px;
+      padding: 10px;
+      box-sizing: border-box;
+      border-radius: 12px;
+      background: var(--ha-card-background, var(--card-background-color, #fff));
+      border: 1px solid var(--divider-color, rgba(127,127,127,0.2));
+      box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+      color: var(--primary-text-color, #333);
+      font-size: 12.5px;
     }
-    .date-field input[type='date']::-webkit-calendar-picker-indicator {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      cursor: pointer;
+    .cal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      font-weight: 700;
     }
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+      text-align: center;
+    }
+    .cal-wd {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--secondary-text-color, #888);
+      padding: 4px 0;
+    }
+    .cal-day {
+      height: 30px;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+      font-variant-numeric: tabular-nums;
+    }
+    .cal-day:hover:not([disabled]) {
+      background: var(--secondary-background-color, rgba(127,127,127,0.1));
+    }
+    .cal-day.today { font-weight: 700; color: var(--primary-color, #03a9f4); }
+    .cal-day.sel {
+      background: var(--primary-color, #03a9f4);
+      color: var(--text-primary-color, #fff);
+    }
+    .cal-day[disabled] { opacity: 0.3; cursor: default; }
     .date-picker input.legacy {
       height: 30px;
       box-sizing: border-box;
@@ -381,18 +439,12 @@ export class ChronicleCard extends LitElement {
           @click=${() => this._shiftDate(-1)}>
           <ha-icon icon="mdi:chevron-left"></ha-icon>
         </button>
-        <label class="date-field ${sel ? 'active' : ''}" title="Show events from this day">
+        <button class="date-field ${sel ? 'active' : ''}" title="Show events from this day"
+          @click=${this._toggleCal}>
           <ha-icon icon="mdi:calendar"></ha-icon>
           <span>${this._formatDate(sel || today)}</span>
-          <input
-            type="date"
-            .value=${sel || today}
-            max=${today}
-            @click=${(e: Event) => { try { (e.target as any).showPicker?.(); } catch { /* ignore */ } }}
-            @change=${(e: Event) => this._setDate((e.target as HTMLInputElement).value)}
-            @input=${(e: Event) => this._setDate((e.target as HTMLInputElement).value)}
-          />
-        </label>
+        </button>
+        ${this._calOpen ? this._renderCalendar(sel || today, today) : ''}
         <button class="layout-toggle" title="Next day"
           ?disabled=${!sel || sel >= today}
           @click=${() => this._shiftDate(1)}>
@@ -438,6 +490,67 @@ export class ChronicleCard extends LitElement {
       case 'YMD': return `${y}-${m}-${d}`;
       default:    return `${d}/${m}/${y}`;
     }
+  }
+
+  private _toggleCal(e: Event) {
+    e.stopPropagation();
+    this._calOpen = !this._calOpen;
+    if (this._calOpen) {
+      this._calMonth = (this._selectedDate || this._todayStr()).slice(0, 7);
+      setTimeout(() => document.addEventListener('click', this._outsideClick, { capture: true }), 0);
+    }
+  }
+
+  /** First day of week: HA profile (hass.locale.first_weekday) if set, else Monday. 0=Sun..6=Sat */
+  private _firstWeekday(): number {
+    const fw = (this._hass as any)?.locale?.first_weekday as string | undefined;
+    const map: Record<string, number> = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+    return fw && fw in map ? map[fw] : 1;
+  }
+
+  private _renderCalendar(sel: string, today: string) {
+    const [y, m] = this._calMonth.split('-').map(Number);
+    const first = new Date(y, m - 1, 1);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const fw = this._firstWeekday();
+    const lead = (first.getDay() - fw + 7) % 7;
+    const lang = this._config?.language || (this._hass as any)?.locale?.language || this._hass?.language;
+    let fmtLang: string | undefined = lang;
+    try { new Intl.DateTimeFormat(fmtLang); } catch { fmtLang = undefined; }
+    const monthLabel = first.toLocaleDateString(fmtLang, { month: 'long', year: 'numeric' });
+    const wd = Array.from({ length: 7 }, (_, i) =>
+      new Date(2024, 0, 7 + ((fw + i) % 7)).toLocaleDateString(fmtLang, { weekday: 'short' }).replace('.', ''));
+    const p = (n: number) => String(n).padStart(2, '0');
+    const cells = [];
+    for (let i = 0; i < lead; i++) cells.push(html`<span></span>`);
+    for (let d = 1; d <= daysInMonth; d++) {
+      const iso = `${y}-${p(m)}-${p(d)}`;
+      cells.push(html`<button
+        class="cal-day ${iso === sel ? 'sel' : ''} ${iso === today ? 'today' : ''}"
+        ?disabled=${iso > today}
+        @click=${(e: Event) => { e.stopPropagation(); this._calOpen = false; this._setDate(iso === today ? '' : iso); }}
+      >${d}</button>`);
+    }
+    const canNext = `${y}-${p(m)}` < today.slice(0, 7);
+    return html`
+      <div class="cal" @click=${(e: Event) => e.stopPropagation()}>
+        <div class="cal-head">
+          <button class="layout-toggle" @click=${() => this._shiftMonth(-1)}><ha-icon icon="mdi:chevron-left"></ha-icon></button>
+          <span>${monthLabel}</span>
+          <button class="layout-toggle" ?disabled=${!canNext} @click=${() => canNext && this._shiftMonth(1)}><ha-icon icon="mdi:chevron-right"></ha-icon></button>
+        </div>
+        <div class="cal-grid">
+          ${wd.map((w) => html`<span class="cal-wd">${w}</span>`)}
+          ${cells}
+        </div>
+      </div>
+    `;
+  }
+
+  private _shiftMonth(delta: number) {
+    const [y, m] = this._calMonth.split('-').map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    this._calMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   }
 
   private _shiftDate(days: number) {
