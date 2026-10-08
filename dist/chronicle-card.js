@@ -1110,6 +1110,7 @@ function e(e,t,i,o){var r,a=arguments.length,n=a<3?t:null===o?o=Object.getOwnPro
           max=${e}
           title="Show events from this day"
           @change=${e=>this._setDate(e.target.value)}
+          @input=${e=>this._setDate(e.target.value)}
         />
         <button class="layout-toggle" title="Next day"
           ?disabled=${!t||t>=e}
@@ -1123,7 +1124,7 @@ function e(e,t,i,o){var r,a=arguments.length,n=a<3?t:null===o?o=Object.getOwnPro
           </button>
         `:""}
       </div>
-    `}_shiftDate(e){const t=this._selectedDate||this._todayStr(),[i,o,r]=t.split("-").map(Number),a=new Date(i,o-1,r+e),n=e=>String(e).padStart(2,"0"),s=`${a.getFullYear()}-${n(a.getMonth()+1)}-${n(a.getDate())}`;s>this._todayStr()||this._setDate(s)}_setDate(e){const t=this._todayStr(),i=e&&e<=t?e:"";this._selectedDate=i,this._store.setSelectedDate(i||null,this._hass).catch(e=>{console.warn("[chronicle-card] Date fetch error:",e)})}_setLayout(e){this._layout=e}_onShowDetail(e){const t=e.detail.event;this._dialog&&this._dialog.show(t)}_onToggleGroup(e){const t=e.detail.group;this._store.toggleGroup(t)}getCardSize(){return 4}};yt.styles=n`
+    `}_shiftDate(e){const t=this._selectedDate||this._todayStr(),[i,o,r]=t.split("-").map(Number),a=new Date(i,o-1,r+e),n=e=>String(e).padStart(2,"0"),s=`${a.getFullYear()}-${n(a.getMonth()+1)}-${n(a.getDate())}`;s>this._todayStr()||this._setDate(s)}_setDate(e){const t=this._todayStr(),i=e&&e<=t?e:"";i!==this._selectedDate&&(this._selectedDate=i,this._store.setSelectedDate(i||null,this._hass).catch(e=>{console.warn("[chronicle-card] Date fetch error:",e)}))}_setLayout(e){this._layout=e}_onShowDetail(e){const t=e.detail.event;this._dialog&&this._dialog.show(t)}_onToggleGroup(e){const t=e.detail.group;this._store.toggleGroup(t)}getCardSize(){return 4}};yt.styles=n`
     :host {
       display: block;
       contain: content;

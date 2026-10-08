@@ -344,6 +344,7 @@ export class ChronicleCard extends LitElement {
           max=${today}
           title="Show events from this day"
           @change=${(e: Event) => this._setDate((e.target as HTMLInputElement).value)}
+          @input=${(e: Event) => this._setDate((e.target as HTMLInputElement).value)}
         />
         <button class="layout-toggle" title="Next day"
           ?disabled=${!sel || sel >= today}
@@ -373,6 +374,7 @@ export class ChronicleCard extends LitElement {
   private _setDate(date: string) {
     const today = this._todayStr();
     const value = date && date <= today ? date : '';
+    if (value === this._selectedDate) return; // input + change both fire
     this._selectedDate = value;
     this._store.setSelectedDate(value || null, this._hass).catch((err: unknown) => {
       console.warn('[chronicle-card] Date fetch error:', err);
