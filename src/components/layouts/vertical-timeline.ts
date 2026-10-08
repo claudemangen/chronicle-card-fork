@@ -23,6 +23,8 @@ export class VerticalTimeline extends LitElement {
   @property({ attribute: false }) appearance?: AppearanceConfig;
   @property({ attribute: false }) hass?: any;
   @property({ type: Boolean, reflect: true }) compact = false;
+  /** When true the card header shows the current day, so in-list headers are not pinned. */
+  @property({ type: Boolean }) headerDate = false;
   @property({ type: String }) timeFormat: '12h' | '24h' = '24h';
   @property({ type: Boolean }) animateNew = true;
 
@@ -134,13 +136,13 @@ export class VerticalTimeline extends LitElement {
     const fill = height === 'fill' || height === '100%';
     const style = fill || height === 'auto' ? '' : `max-height: ${height}`;
     this.classList.toggle('fill', fill);
-    this.classList.toggle('sticky-dates', this.appearance?.sticky_date_headers === true);
+    this.classList.toggle('sticky-dates', this.appearance?.sticky_date_headers === true && !this.headerDate);
 
     return html`
-      <div class="timeline-container" style=${style}>
+      <div class="timeline-container" style=${style} @scroll=${this._onScroll}>
         <div class="timeline-inner">
           ${sections.map((section) => html`
-            <div class="date-section">
+            <div class="date-section" data-label=${section.label}>
               <chronicle-date-header
                 .label=${section.label}
                 .eventCount=${this._countEvents(section.items)}
@@ -189,7 +191,51 @@ export class VerticalTimeline extends LitElement {
     }
   }
 
+  private _lastLabel?: string;
+  private _raf = 0;
+  private _winScroll = () => this._onScroll();
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    window.addEventListener('scroll', this._winScroll, { passive: true, capture: true });
+  }
+
+  /** Find the day section at the top of the viewport and tell the card. */
+  private _onScroll() {
+    if (!this.headerDate || this._raf) return;
+    this._raf = requestAnimationFrame(() => {
+      this._raf = 0;
+      const container = this.renderRoot.querySelector('.timeline-container') as HTMLElement | null;
+      if (!container) return;
+      const sections = Array.from(this.renderRoot.querySelectorAll<HTMLElement>('.date-section'));
+      if (!sections.length) return;
+      const scrolls = container.scrollHeight > container.clientHeight + 1;
+      const top = scrolls ? container.getBoundingClientRect().top : Math.max(0, container.getBoundingClientRect().top);
+      let label = sections[0].dataset.label ?? '';
+      for (const s of sections) {
+        if (s.getBoundingClientRect().bottom > top + 4) { label = s.dataset.label ?? ''; break; }
+      }
+      this._emitLabel(label);
+    });
+  }
+
+  private _emitLabel(label: string) {
+    if (label === this._lastLabel) return;
+    this._lastLabel = label;
+    this.dispatchEvent(new CustomEvent('chronicle-visible-date', {
+      detail: { label }, bubbles: true, composed: true,
+    }));
+  }
+
   protected updated(): void {
+    if (this.headerDate) {
+      const first = this.renderRoot.querySelector<HTMLElement>('.date-section');
+      if (!first) this._emitLabel('');
+      else if (this._lastLabel === undefined || !this.renderRoot.querySelector(`.date-section[data-label="${CSS.escape(this._lastLabel)}"]`)) {
+        this._lastLabel = undefined;
+        this._onScroll();
+      }
+    }
     const sentinel = this.renderRoot.querySelector('.load-sentinel');
     const container = this.renderRoot.querySelector('.timeline-container') as HTMLElement | null;
     this._observer?.disconnect();
@@ -209,6 +255,7 @@ export class VerticalTimeline extends LitElement {
   disconnectedCallback(): void {
     super.disconnectedCallback();
     this._observer?.disconnect();
+    window.removeEventListener('scroll', this._winScroll, { capture: true } as EventListenerOptions);
   }
 
   private _groupByDate(items: Array<ChronicleEvent | EventGroup>): DateSection[] {

@@ -15,6 +15,7 @@ export class ChronicleCard extends LitElement {
   @state() private _items: Array<ChronicleEvent | EventGroup> = [];
   @state() private _layout: 'vertical' | 'horizontal' = 'vertical';
   @state() private _selectedDate = '';
+  @state() private _visibleDate = '';
 
   @query('chronicle-detail-dialog') private _dialog?: any;
 
@@ -191,6 +192,27 @@ export class ChronicleCard extends LitElement {
       --mdc-icon-size: 17px;
     }
 
+    .title-wrap {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      min-width: 0;
+    }
+    .current-date {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--secondary-text-color, #888);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .layout-toggle[disabled] {
+      opacity: 0.35;
+      cursor: default;
+    }
+
     .date-picker {
       display: flex;
       align-items: center;
@@ -236,12 +258,17 @@ export class ChronicleCard extends LitElement {
     const timeFormat = this._config.time_format ?? '24h';
     const compact = appearance.compact ?? false;
     const animate = appearance.animate_new_events !== false;
+    // Sticky date + visible header → show the current day in the card header.
+    const headerDate = showHeader && appearance.sticky_date_headers === true && this._layout === 'vertical';
 
     return html`
       <ha-card>
         ${showHeader ? html`
           <div class="card-header">
-            <span class="title">${this._config.title ?? ''}</span>
+            <span class="title-wrap">
+              <span class="title">${this._config.title ?? ''}</span>
+              ${headerDate && this._visibleDate ? html`<span class="current-date">${this._visibleDate}</span>` : ''}
+            </span>
             ${this._config.show_date_picker ? this._renderDatePicker() : ''}
             ${showToggle ? html`
               <div class="header-actions">
@@ -274,6 +301,8 @@ export class ChronicleCard extends LitElement {
                 .timeFormat=${timeFormat}
                 ?compact=${compact}
                 ?animateNew=${animate}
+                ?headerDate=${headerDate}
+                @chronicle-visible-date=${(e: CustomEvent) => { this._visibleDate = e.detail.label; }}
               ></chronicle-vertical-timeline>
             `
             : html`

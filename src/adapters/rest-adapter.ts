@@ -71,9 +71,53 @@ export class RestAdapter implements ISourceAdapter {
     this.config = config;
   }
 
-  async fetchEvents(hass: HomeAssistant, _range: TimeRange): Promise<ChronicleEvent[]> {
-    const wsParams = this.config.ws_params;
-    const url = this.config.url;
+  /**
+   * Replace time-range placeholders in a string:
+   *   {start} / {end}         ISO 8601
+   *   {start_ts} / {end_ts}   unix seconds (also {after} / {before})
+   *   {start_ms} / {end_ms}   unix milliseconds
+   */
+  private static applyRange(str: string, range: TimeRange): string {
+    const s = range.start.getTime();
+    const e = range.end.getTime();
+    return str
+      .replace(/\{start\}/g, encodeURIComponent(range.start.toISOString()))
+      .replace(/\{end\}/g, encodeURIComponent(range.end.toISOString()))
+      .replace(/\{(start_ts|after)\}/g, String(Math.floor(s / 1000)))
+      .replace(/\{(end_ts|before)\}/g, String(Math.ceil(e / 1000)))
+      .replace(/\{start_ms\}/g, String(s))
+      .replace(/\{end_ms\}/g, String(e));
+  }
+
+  private static isFrigateEventsUrl(url: string): boolean {
+    return /frigate/i.test(url) && /\/events(\?|$)/.test(url);
+  }
+
+  async fetchEvents(hass: HomeAssistant, range: TimeRange): Promise<ChronicleEvent[]> {
+    let wsParams = this.config.ws_params;
+    let url = this.config.url;
+
+    // Time-range support so the date picker / days_back actually filter
+    // REST and WebSocket sources (previously the range was ignored).
+    if (url) {
+      url = RestAdapter.applyRange(url, range);
+      if (RestAdapter.isFrigateEventsUrl(url) && !/[?&](after|before)=/.test(url)) {
+        url += `${url.includes('?') ? '&' : '?'}after=${Math.floor(range.start.getTime() / 1000)}&before=${Math.ceil(range.end.getTime() / 1000)}`;
+      }
+    }
+    if (wsParams) {
+      const p: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(wsParams)) {
+        if (typeof v !== 'string') { p[k] = v; continue; }
+        const replaced = RestAdapter.applyRange(v, range);
+        p[k] = replaced !== v && /^\d+$/.test(replaced) ? Number(replaced) : decodeURIComponent(replaced);
+      }
+      if (typeof p.type === 'string' && p.type.startsWith('frigate/events') ) {
+        if (p.after === undefined) p.after = Math.floor(range.start.getTime() / 1000);
+        if (p.before === undefined) p.before = Math.ceil(range.end.getTime() / 1000);
+      }
+      wsParams = p;
+    }
 
     if (!url && !wsParams) {
       console.warn('[chronicle-card] RestAdapter: no url or ws_params configured');
