@@ -49,7 +49,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export const CARD_VERSION = '1.13.0';
-export const CARD_NAME = 'chronicle-card-fork';
+export const CARD_NAME = 'chronicle-card-local-snaps';
 export const EDITOR_NAME = 'chronicle-card-fork-editor';
 
 export const DEFAULT_POLL_INTERVAL = 30;
