@@ -485,6 +485,10 @@ export class ChronicleEditor extends LitElement {
               ${this._renderToggle(a.compact ?? false, (v) => this._setNested('appearance', 'compact', v))}
             </div>
             <div class="toggle-row">
+              <span class="toggle-label">Sticky Date Headers</span>
+              ${this._renderToggle(a.sticky_date_headers ?? false, (v) => this._setNested('appearance', 'sticky_date_headers', v))}
+            </div>
+            <div class="toggle-row">
               <span class="toggle-label">Show Images</span>
               ${this._renderToggle(a.show_images !== false, (v) => this._setNested('appearance', 'show_images', v))}
             </div>

@@ -84,6 +84,14 @@ export class VerticalTimeline extends LitElement {
     .date-section {
       margin-bottom: 2px;
     }
+    /* Sticky date headers — each header pins to the top of the scroll
+       container until the next day's section pushes it away. */
+    :host(.sticky-dates) chronicle-date-header {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      background: var(--ha-card-background, var(--card-background-color, #fff));
+    }
     .date-section:last-child {
       margin-bottom: 0;
     }
@@ -99,6 +107,7 @@ export class VerticalTimeline extends LitElement {
     const fill = height === 'fill' || height === '100%';
     const style = fill || height === 'auto' ? '' : `max-height: ${height}`;
     this.classList.toggle('fill', fill);
+    this.classList.toggle('sticky-dates', this.appearance?.sticky_date_headers === true);
 
     return html`
       <div class="timeline-container" style=${style}>

@@ -116,6 +116,8 @@ export interface GroupingConfig {
 export interface AppearanceConfig {
   card_height?: string;
   compact?: boolean;
+  /** Keep the current day's date header (Today, Yesterday, ...) pinned at the top while scrolling. */
+  sticky_date_headers?: boolean;
   show_images?: boolean;
   show_icons?: boolean;
   show_severity_badge?: boolean;
@@ -169,6 +171,7 @@ export const DEFAULT_CONFIG: Partial<ChronicleCardConfig> = {
   appearance: {
     card_height: '400px',
     compact: false,
+    sticky_date_headers: false,
     show_images: true,
     show_icons: true,
     show_severity_badge: true,
