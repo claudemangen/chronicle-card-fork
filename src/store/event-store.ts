@@ -41,6 +41,10 @@ export class EventStore {
   private listeners: Set<ChangeCallback> = new Set();
   private config!: ChronicleCardConfig;
   private fetchPromise: Promise<void> | null = null;
+  /** Selected day as local YYYY-MM-DD, or null for the default rolling window. */
+  private selectedDate: string | null = null;
+  /** Bumped on every date change so stale in-flight fetches are discarded. */
+  private fetchGen = 0;
 
   get items(): Array<ChronicleEvent | EventGroup> {
     return this.filteredItems;
@@ -62,6 +66,35 @@ export class EventStore {
         console.warn('[chronicle-card] Skipping source:', err);
       }
     }
+  }
+
+  get date(): string | null {
+    return this.selectedDate;
+  }
+
+  /**
+   * Show events for a single local day (YYYY-MM-DD), or pass null to return
+   * to the normal `days_back` window. Clears current items and refetches.
+   */
+  async setSelectedDate(date: string | null, hass?: HomeAssistant): Promise<void> {
+    const next = date || null;
+    if (next === this.selectedDate) return;
+    this.selectedDate = next;
+    this.fetchGen++;
+    this.fetchPromise = null;
+    this.allEvents = [];
+    this.lastHash = '';
+    this.lastFetch = 0;
+    this.applyFiltersAndGroup();
+    if (hass) await this.fetch(hass, true);
+  }
+
+  private _dayRange(date: string): TimeRange {
+    const [y, m, d] = date.split('-').map(Number);
+    const start = new Date(y, m - 1, d, 0, 0, 0, 0);
+    const dayEnd = new Date(y, m - 1, d + 1, 0, 0, 0, 0);
+    const now = new Date();
+    return { start, end: dayEnd < now ? dayEnd : now };
   }
 
   subscribe(callback: ChangeCallback): () => void {
@@ -98,14 +131,22 @@ export class EventStore {
   }
 
   private async _doFetch(hass: HomeAssistant): Promise<void> {
-    const daysBack = this.config.days_back ?? DEFAULT_CONFIG.days_back ?? 7;
-    const end = new Date();
-    const start = new Date(end.getTime() - daysBack * 24 * 60 * 60 * 1000);
-    const range: TimeRange = { start, end };
+    const gen = this.fetchGen;
+    let range: TimeRange;
+    if (this.selectedDate) {
+      range = this._dayRange(this.selectedDate);
+    } else {
+      const daysBack = this.config.days_back ?? DEFAULT_CONFIG.days_back ?? 7;
+      const end = new Date();
+      const start = new Date(end.getTime() - daysBack * 24 * 60 * 60 * 1000);
+      range = { start, end };
+    }
 
     const results = await Promise.allSettled(
       this.adapters.map((a) => a.fetchEvents(hass, range)),
     );
+
+    if (gen !== this.fetchGen) return; // date changed while fetching
 
     const events: ChronicleEvent[] = [];
     for (const result of results) {
@@ -134,6 +175,18 @@ export class EventStore {
 
     // Resolve Jinja2 image templates to URLs
     await this.resolveTemplates(hass, unique);
+
+    if (gen !== this.fetchGen) return;
+
+    // Some adapters return a padded window — keep only the selected day.
+    if (this.selectedDate) {
+      const s = range.start.getTime();
+      const e = range.end.getTime() + 1;
+      for (let i = unique.length - 1; i >= 0; i--) {
+        const t = new Date(unique[i].start).getTime();
+        if (t < s || t > e) unique.splice(i, 1);
+      }
+    }
 
     // Check if data actually changed
     const hash = this.computeHash(unique);
@@ -277,6 +330,13 @@ export class EventStore {
   async injectLiveEvent(event: ChronicleEvent, hass?: HomeAssistant): Promise<void> {
     // Add to front if not duplicate
     if (this.allEvents.some((e) => e.id === event.id)) return;
+
+    // Ignore live events that fall outside a selected past day
+    if (this.selectedDate) {
+      const { start } = this._dayRange(this.selectedDate);
+      const t = new Date(event.start).getTime();
+      if (t < start.getTime() || t >= start.getTime() + 86400000) return;
+    }
 
     // Resolve template for this single live event
     if (hass) {

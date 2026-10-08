@@ -14,6 +14,7 @@ export class ChronicleCard extends LitElement {
   @state() private _config!: ChronicleCardConfig;
   @state() private _items: Array<ChronicleEvent | EventGroup> = [];
   @state() private _layout: 'vertical' | 'horizontal' = 'vertical';
+  @state() private _selectedDate = '';
 
   @query('chronicle-detail-dialog') private _dialog?: any;
 
@@ -49,6 +50,8 @@ export class ChronicleCard extends LitElement {
     this._layout = this._config.layout ?? 'vertical';
     this._syncLocale();
     this._store.configure(this._config);
+    if (!this._config.show_date_picker) this._selectedDate = '';
+    this._store.setSelectedDate(this._selectedDate || null).catch(() => {});
 
     this._storeUnsub?.();
     this._storeUnsub = this._store.subscribe(() => {
@@ -188,6 +191,36 @@ export class ChronicleCard extends LitElement {
       --mdc-icon-size: 17px;
     }
 
+    .date-picker {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      margin-left: auto;
+      margin-right: 6px;
+    }
+    .date-picker input[type='date'] {
+      height: 30px;
+      box-sizing: border-box;
+      padding: 0 8px;
+      border-radius: 8px;
+      border: 1px solid var(--divider-color, rgba(127,127,127,0.25));
+      background: transparent;
+      color: var(--primary-text-color, #333);
+      font: inherit;
+      font-size: 12.5px;
+      color-scheme: light dark;
+      cursor: pointer;
+    }
+    .date-picker input[type='date']:focus {
+      outline: none;
+      border-color: var(--primary-color, #03a9f4);
+    }
+    .date-picker input.active {
+      border-color: var(--primary-color, #03a9f4);
+      color: var(--primary-color, #03a9f4);
+      font-weight: 600;
+    }
+
     .card-content {
       padding: 0 16px 14px;
     }
@@ -209,6 +242,7 @@ export class ChronicleCard extends LitElement {
         ${showHeader ? html`
           <div class="card-header">
             <span class="title">${this._config.title ?? ''}</span>
+            ${this._config.show_date_picker ? this._renderDatePicker() : ''}
             ${showToggle ? html`
               <div class="header-actions">
                 <button
@@ -256,6 +290,64 @@ export class ChronicleCard extends LitElement {
         <chronicle-detail-dialog .hass=${this.hass}></chronicle-detail-dialog>
       </ha-card>
     `;
+  }
+
+  private _todayStr(offsetDays = 0): string {
+    const d = new Date();
+    d.setDate(d.getDate() + offsetDays);
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+
+  private _renderDatePicker() {
+    const today = this._todayStr();
+    const sel = this._selectedDate;
+    return html`
+      <div class="date-picker">
+        <button class="layout-toggle" title="Previous day"
+          @click=${() => this._shiftDate(-1)}>
+          <ha-icon icon="mdi:chevron-left"></ha-icon>
+        </button>
+        <input
+          type="date"
+          class=${sel ? 'active' : ''}
+          .value=${sel || today}
+          max=${today}
+          title="Show events from this day"
+          @change=${(e: Event) => this._setDate((e.target as HTMLInputElement).value)}
+        />
+        <button class="layout-toggle" title="Next day"
+          ?disabled=${!sel || sel >= today}
+          @click=${() => this._shiftDate(1)}>
+          <ha-icon icon="mdi:chevron-right"></ha-icon>
+        </button>
+        ${sel ? html`
+          <button class="layout-toggle" title="Back to latest events"
+            @click=${() => this._setDate('')}>
+            <ha-icon icon="mdi:calendar-today"></ha-icon>
+          </button>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  private _shiftDate(days: number) {
+    const base = this._selectedDate || this._todayStr();
+    const [y, m, d] = base.split('-').map(Number);
+    const dt = new Date(y, m - 1, d + days);
+    const p = (n: number) => String(n).padStart(2, '0');
+    const next = `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
+    if (next > this._todayStr()) return;
+    this._setDate(next);
+  }
+
+  private _setDate(date: string) {
+    const today = this._todayStr();
+    const value = date && date <= today ? date : '';
+    this._selectedDate = value;
+    this._store.setSelectedDate(value || null, this._hass).catch((err: unknown) => {
+      console.warn('[chronicle-card] Date fetch error:', err);
+    });
   }
 
   private _setLayout(layout: 'vertical' | 'horizontal') {

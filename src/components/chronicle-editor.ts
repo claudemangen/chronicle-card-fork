@@ -227,6 +227,10 @@ export class ChronicleEditor extends LitElement {
               ${this._renderToggle(c.show_header !== false, (v) => this._set('show_header', v))}
             </div>
             <div class="toggle-row">
+              <span class="toggle-label">Show Date Picker</span>
+              ${this._renderToggle(c.show_date_picker ?? false, (v) => this._set('show_date_picker', v))}
+            </div>
+            <div class="toggle-row">
               <span class="toggle-label">Show Layout Toggle</span>
               ${this._renderToggle(c.show_layout_toggle !== false, (v) => this._set('show_layout_toggle', v))}
             </div>

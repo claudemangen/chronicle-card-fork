@@ -137,6 +137,8 @@ export interface ChronicleCardConfig {
   time_format?: '12h' | '24h';
   language?: string;
   show_header?: boolean;
+  /** Show a date picker in the header to view events from a specific day. */
+  show_date_picker?: boolean;
   sources: SourceConfig[];
   filters?: FilterConfig;
   grouping?: GroupingConfig;
