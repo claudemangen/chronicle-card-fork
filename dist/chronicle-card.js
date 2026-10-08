@@ -1281,7 +1281,16 @@ function e(e,t,i,o){var r,a=arguments.length,n=a<3?t:null===o?o=Object.getOwnPro
       --mdc-icon-size: 15px;
       opacity: 0.7;
     }
-    .date-field { font: inherit; background: transparent; }
+    .date-field {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1;
+      height: 28px;
+      padding: 0 8px;
+      background: transparent;
+    }
+    .date-field.active { font-weight: 600; }
     .date-picker { position: relative; }
     .cal {
       position: absolute;
@@ -1292,9 +1301,15 @@ function e(e,t,i,o){var r,a=arguments.length,n=a<3?t:null===o?o=Object.getOwnPro
       padding: 10px;
       box-sizing: border-box;
       border-radius: 12px;
-      background: var(--ha-card-background, var(--card-background-color, #fff));
+      /* Opaque base (themes often use translucent card backgrounds) with the
+         card colour layered on top */
+      background-color: var(--primary-background-color, #fafafa);
+      background-image: linear-gradient(
+        var(--card-background-color, #fff),
+        var(--card-background-color, #fff)
+      );
       border: 1px solid var(--divider-color, rgba(127,127,127,0.2));
-      box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+      box-shadow: 0 6px 24px rgba(0,0,0,0.25);
       color: var(--primary-text-color, #333);
       font-size: 12.5px;
     }
