@@ -230,6 +230,22 @@ export class ChronicleEditor extends LitElement {
               <span class="toggle-label">Show Date Picker</span>
               ${this._renderToggle(c.show_date_picker ?? false, (v) => this._set('show_date_picker', v))}
             </div>
+            ${c.show_date_picker ? html`
+              <div class="field">
+                <ha-selector
+                  .hass=${this.hass}
+                  .selector=${{ select: { mode: 'dropdown', options: [
+                    { value: 'profile', label: 'From user profile' },
+                    { value: 'DMY', label: 'Day/Month/Year (31/12/2026)' },
+                    { value: 'MDY', label: 'Month/Day/Year (12/31/2026)' },
+                    { value: 'YMD', label: 'Year-Month-Day (2026-12-31)' },
+                  ] } }}
+                  .value=${c.date_format ?? 'profile'}
+                  .label=${'Date format'}
+                  @value-changed=${(e: any) => this._set('date_format', e.detail.value)}
+                ></ha-selector>
+              </div>
+            ` : ''}
             <div class="toggle-row">
               <span class="toggle-label">Show Layout Toggle</span>
               ${this._renderToggle(c.show_layout_toggle !== false, (v) => this._set('show_layout_toggle', v))}

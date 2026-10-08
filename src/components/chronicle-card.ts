@@ -220,7 +220,51 @@ export class ChronicleCard extends LitElement {
       margin-left: auto;
       margin-right: 6px;
     }
-    .date-picker input[type='date'] {
+    .date-field {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 30px;
+      box-sizing: border-box;
+      padding: 0 10px;
+      border-radius: 8px;
+      border: 1px solid var(--divider-color, rgba(127,127,127,0.25));
+      color: var(--primary-text-color, #333);
+      font-size: 12.5px;
+      font-variant-numeric: tabular-nums;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .date-field.active {
+      border-color: var(--primary-color, #03a9f4);
+      color: var(--primary-color, #03a9f4);
+      font-weight: 600;
+    }
+    .date-field ha-icon {
+      --mdc-icon-size: 15px;
+      opacity: 0.7;
+    }
+    /* Native input stays on top (invisible) so taps open the OS date picker */
+    .date-field input[type='date'] {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      border: 0;
+      padding: 0;
+      margin: 0;
+      cursor: pointer;
+    }
+    .date-field input[type='date']::-webkit-calendar-picker-indicator {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+    }
+    .date-picker input.legacy {
       height: 30px;
       box-sizing: border-box;
       padding: 0 8px;
@@ -337,15 +381,18 @@ export class ChronicleCard extends LitElement {
           @click=${() => this._shiftDate(-1)}>
           <ha-icon icon="mdi:chevron-left"></ha-icon>
         </button>
-        <input
-          type="date"
-          class=${sel ? 'active' : ''}
-          .value=${sel || today}
-          max=${today}
-          title="Show events from this day"
-          @change=${(e: Event) => this._setDate((e.target as HTMLInputElement).value)}
-          @input=${(e: Event) => this._setDate((e.target as HTMLInputElement).value)}
-        />
+        <label class="date-field ${sel ? 'active' : ''}" title="Show events from this day">
+          <ha-icon icon="mdi:calendar"></ha-icon>
+          <span>${this._formatDate(sel || today)}</span>
+          <input
+            type="date"
+            .value=${sel || today}
+            max=${today}
+            @click=${(e: Event) => { try { (e.target as any).showPicker?.(); } catch { /* ignore */ } }}
+            @change=${(e: Event) => this._setDate((e.target as HTMLInputElement).value)}
+            @input=${(e: Event) => this._setDate((e.target as HTMLInputElement).value)}
+          />
+        </label>
         <button class="layout-toggle" title="Next day"
           ?disabled=${!sel || sel >= today}
           @click=${() => this._shiftDate(1)}>
@@ -359,6 +406,38 @@ export class ChronicleCard extends LitElement {
         ` : ''}
       </div>
     `;
+  }
+
+  /**
+   * Resolve the date order: card `date_format` override, else the HA profile
+   * setting (hass.locale.date_format), else day/month/year.
+   */
+  private _dateOrder(): 'DMY' | 'MDY' | 'YMD' {
+    const cfg = this._config?.date_format;
+    if (cfg === 'DMY' || cfg === 'MDY' || cfg === 'YMD') return cfg;
+    const prof = (this._hass as any)?.locale?.date_format as string | undefined;
+    if (prof === 'DMY' || prof === 'MDY' || prof === 'YMD') return prof;
+    if (prof === 'language' || prof === 'system') {
+      const lang = prof === 'system' ? undefined : (this._hass as any)?.locale?.language || this._hass?.language;
+      try {
+        const parts = new Intl.DateTimeFormat(lang, { year: 'numeric', month: '2-digit', day: '2-digit' })
+          .formatToParts(new Date(2026, 11, 31))
+          .map((p) => p.type)
+          .filter((t) => t === 'day' || t === 'month' || t === 'year');
+        const order = parts.map((t) => t[0].toUpperCase()).join('');
+        if (order === 'DMY' || order === 'MDY' || order === 'YMD') return order;
+      } catch { /* fall through */ }
+    }
+    return 'DMY';
+  }
+
+  private _formatDate(iso: string): string {
+    const [y, m, d] = iso.split('-');
+    switch (this._dateOrder()) {
+      case 'MDY': return `${m}/${d}/${y}`;
+      case 'YMD': return `${y}-${m}-${d}`;
+      default:    return `${d}/${m}/${y}`;
+    }
   }
 
   private _shiftDate(days: number) {

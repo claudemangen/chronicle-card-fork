@@ -139,6 +139,12 @@ export interface ChronicleCardConfig {
   show_header?: boolean;
   /** Show a date picker in the header to view events from a specific day. */
   show_date_picker?: boolean;
+  /**
+   * Date format for the header date picker:
+   * 'profile' (default) follows the HA user profile (Settings → Profile → Date format),
+   * or force 'DMY' (31/12/2026), 'MDY' (12/31/2026), 'YMD' (2026-12-31).
+   */
+  date_format?: 'profile' | 'DMY' | 'MDY' | 'YMD';
   sources: SourceConfig[];
   filters?: FilterConfig;
   grouping?: GroupingConfig;
