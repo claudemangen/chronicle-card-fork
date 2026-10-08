@@ -9,7 +9,7 @@ import './layouts/vertical-timeline';
 import './layouts/horizontal-timeline';
 import './elements/detail-dialog';
 
-@customElement('chronicle-card')
+@customElement('chronicle-card-local-snaps')
 export class ChronicleCard extends LitElement {
   @state() private _config!: ChronicleCardConfig;
   @state() private _items: Array<ChronicleEvent | EventGroup> = [];
@@ -23,12 +23,12 @@ export class ChronicleCard extends LitElement {
   private _liveSubscribed = false;
 
   static getConfigElement() {
-    return document.createElement('chronicle-card-editor');
+    return document.createElement('chronicle-card-local-snaps-editor');
   }
 
   static getStubConfig() {
     return {
-      type: 'custom:chronicle-card',
+      type: 'custom:chronicle-card-local-snaps',
       title: 'Timeline',
       layout: 'vertical',
       sources: [],

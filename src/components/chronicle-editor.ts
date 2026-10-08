@@ -5,7 +5,7 @@ import { ChronicleCardConfig, DEFAULT_CONFIG } from '../models/config';
 import { loadHaComponents } from '../utils/load-ha-components';
 import './source-editor';
 
-@customElement('chronicle-card-editor')
+@customElement('chronicle-card-local-snaps-editor')
 export class ChronicleEditor extends LitElement {
   @property({ attribute: false }) hass?: HomeAssistant;
   @state() private _config!: ChronicleCardConfig;
