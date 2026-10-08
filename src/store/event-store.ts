@@ -31,6 +31,10 @@ function timestampOf(item: ChronicleEvent | EventGroup): number {
 
 type ChangeCallback = () => void;
 
+/** Max entries kept in the resolved-media/template cache. */
+const RESOLVE_CACHE_MAX = 3000;
+
+
 export class EventStore {
   private adapters: ISourceAdapter[] = [];
   private allEvents: ChronicleEvent[] = [];
@@ -45,6 +49,12 @@ export class EventStore {
   private selectedDate: string | null = null;
   /** Bumped on every date change so stale in-flight fetches are discarded. */
   private fetchGen = 0;
+  /**
+   * Cache of resolved image/clip URLs keyed by `${kind}|${template}|${eventId}`.
+   * Events are recreated on every poll, so without this every refresh would
+   * re-render every Jinja template (one WebSocket round-trip per event).
+   */
+  private resolveCache = new Map<string, string>();
 
   get items(): Array<ChronicleEvent | EventGroup> {
     return this.filteredItems;
@@ -170,13 +180,6 @@ export class EventStore {
     // Sort newest first
     unique.sort((a, b) => new Date(b.start).getTime() - new Date(a.start).getTime());
 
-    // Resolve media content IDs to URLs
-    await this.resolveMedia(hass, unique);
-
-    // Resolve Jinja2 image templates to URLs
-    await this.resolveTemplates(hass, unique);
-
-    if (gen !== this.fetchGen) return;
 
     // Some adapters return a padded window — keep only the selected day.
     if (this.selectedDate) {
@@ -195,10 +198,72 @@ export class EventStore {
       return;
     }
 
+    // Re-use URLs resolved on earlier polls so known events show images
+    // immediately and need no extra WebSocket calls.
+    this.applyResolveCache(unique);
+
+    // First paint: show the list right away, then resolve media/templates
+    // in the background — only for events that are actually displayed.
     this.allEvents = unique;
     this.lastHash = hash;
     this.lastFetch = Date.now();
     this.applyFiltersAndGroup();
+
+    const visible = this.displayedEvents();
+    const before = new Map(visible.map((e) => [e, `${e.mediaUrl}|${e.metadata?.clip_url}`]));
+    await this.resolveMedia(hass, visible);
+    await this.resolveTemplates(hass, visible);
+    if (gen !== this.fetchGen || this.allEvents !== unique) return;
+    // Replace changed events with fresh objects so Lit re-renders those rows.
+    let changed = false;
+    this.allEvents = unique.map((e) => {
+      const b = before.get(e);
+      if (b !== undefined && b !== `${e.mediaUrl}|${e.metadata?.clip_url}`) {
+        changed = true;
+        return { ...e };
+      }
+      return e;
+    });
+    if (changed) this.applyFiltersAndGroup();
+  }
+
+  /** Flatten the currently displayed items (groups expanded) into events. */
+  private displayedEvents(): ChronicleEvent[] {
+    const out: ChronicleEvent[] = [];
+    for (const item of this.filteredItems) {
+      if (isEventGroup(item)) out.push(...item.events);
+      else out.push(item);
+    }
+    return out;
+  }
+
+  private cacheSet(key: string, value: string): void {
+    if (this.resolveCache.size >= RESOLVE_CACHE_MAX) {
+      // Drop the oldest ~10% (Map keeps insertion order)
+      let n = Math.ceil(RESOLVE_CACHE_MAX / 10);
+      for (const k of this.resolveCache.keys()) {
+        this.resolveCache.delete(k);
+        if (--n <= 0) break;
+      }
+    }
+    this.resolveCache.set(key, value);
+  }
+
+  private applyResolveCache(events: ChronicleEvent[]): void {
+    if (this.resolveCache.size === 0) return;
+    for (const e of events) {
+      if (!e.mediaUrl) {
+        const img = e.metadata?._image_template as string | undefined;
+        const hit = (img && this.resolveCache.get(`img|${img}|${e.id}`))
+          || (e.mediaContentId && this.resolveCache.get(`media|${e.mediaContentId}`));
+        if (hit) e.mediaUrl = hit;
+      }
+      const clip = e.metadata?._clip_url_template as string | undefined;
+      if (clip && !e.metadata?.clip_url) {
+        const hit = this.resolveCache.get(`clip|${clip}|${e.id}`);
+        if (hit) e.metadata = { ...e.metadata, clip_url: hit };
+      }
+    }
   }
 
   private applyFiltersAndGroup(): void {
@@ -393,6 +458,7 @@ export class EventStore {
       const result = results[i];
       if (result.status === 'fulfilled' && result.value) {
         needsResolution[i].mediaUrl = result.value;
+        this.cacheSet(`media|${needsResolution[i].mediaContentId}`, result.value);
       }
     }
   }
@@ -416,7 +482,7 @@ export class EventStore {
     const clipGroups = new Map<string, ChronicleEvent[]>();
     for (const e of events) {
       const tpl = e.metadata?._clip_url_template as string | undefined;
-      if (!tpl || !isJinjaTemplate(tpl)) continue;
+      if (!tpl || !isJinjaTemplate(tpl) || e.metadata?.clip_url) continue;
       const list = clipGroups.get(tpl) || [];
       list.push(e);
       clipGroups.set(tpl, list);
@@ -444,6 +510,7 @@ export class EventStore {
               const url = results[i]?.trim();
               if (url) {
                 evts[i].mediaUrl = url;
+                this.cacheSet(`img|${template}|${evts[i].id}`, url);
               }
             }
           } catch (err) {
@@ -471,6 +538,7 @@ export class EventStore {
               const url = results[i]?.trim();
               if (url) {
                 evts[i].metadata = { ...evts[i].metadata, clip_url: url };
+                this.cacheSet(`clip|${template}|${evts[i].id}`, url);
               }
             }
           } catch (err) {

@@ -2,7 +2,7 @@ import { HomeAssistant } from '../types';
 
 const JINJA_RE = /\{[%{]/;
 const TEMPLATE_TIMEOUT = 5000;
-const BATCH_CHUNK_SIZE = 50;
+const BATCH_CHUNK_SIZE = 100;
 
 /** True if `str` contains Jinja2 template syntax. */
 export function isJinjaTemplate(str: string): boolean {

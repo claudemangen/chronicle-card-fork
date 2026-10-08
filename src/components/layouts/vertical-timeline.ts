@@ -6,6 +6,9 @@ import { localize, getLocale } from '../../localize';
 import '../elements/event-item';
 import '../elements/event-group';
 import '../elements/date-header';
+
+/** Items rendered initially / added per scroll step (progressive rendering). */
+const RENDER_PAGE_SIZE = 30;
 import '../elements/empty-state';
 
 interface DateSection {
@@ -19,9 +22,14 @@ export class VerticalTimeline extends LitElement {
   @property({ attribute: false }) items: Array<ChronicleEvent | EventGroup> = [];
   @property({ attribute: false }) appearance?: AppearanceConfig;
   @property({ attribute: false }) hass?: any;
-  @property({ type: Boolean }) compact = false;
+  @property({ type: Boolean, reflect: true }) compact = false;
   @property({ type: String }) timeFormat: '12h' | '24h' = '24h';
   @property({ type: Boolean }) animateNew = true;
+
+  /** How many items are currently rendered (grows as the user scrolls). */
+  private _renderLimit = RENDER_PAGE_SIZE;
+  private _observer?: IntersectionObserver;
+  private _firstId?: string;
 
   static styles = css`
     :host {
@@ -84,6 +92,21 @@ export class VerticalTimeline extends LitElement {
     .date-section {
       margin-bottom: 2px;
     }
+
+    /* Skip layout/paint work for rows that are scrolled out of view. */
+    chronicle-event-item,
+    chronicle-event-group {
+      content-visibility: auto;
+      contain-intrinsic-size: auto 72px;
+    }
+    :host([compact]) chronicle-event-item,
+    :host([compact]) chronicle-event-group {
+      contain-intrinsic-size: auto 48px;
+    }
+
+    .load-sentinel {
+      height: 1px;
+    }
     /* Sticky date headers — each header pins to the top of the scroll
        container until the next day's section pushes it away. */
     :host(.sticky-dates) chronicle-date-header {
@@ -102,7 +125,11 @@ export class VerticalTimeline extends LitElement {
       return html`<chronicle-empty-state></chronicle-empty-state>`;
     }
 
-    const sections = this._groupByDate(this.items);
+    // Progressive rendering: only build the first N rows; more are added
+    // when the sentinel at the bottom scrolls into view.
+    const total = this.items.length;
+    const visibleItems = total > this._renderLimit ? this.items.slice(0, this._renderLimit) : this.items;
+    const sections = this._groupByDate(visibleItems);
     const height = this.appearance?.card_height ?? '400px';
     const fill = height === 'fill' || height === '100%';
     const style = fill || height === 'auto' ? '' : `max-height: ${height}`;
@@ -141,9 +168,47 @@ export class VerticalTimeline extends LitElement {
               )}
             </div>
           `)}
+          ${total > this._renderLimit ? html`<div class="load-sentinel"></div>` : ''}
         </div>
       </div>
     `;
+  }
+
+  protected willUpdate(changed: Map<string, unknown>): void {
+    if (changed.has('items')) {
+      // Reset paging when the list is replaced by a different one (e.g. a new
+      // date was picked) — but not when live events are merely prepended.
+      const items = this.items ?? [];
+      const prevFirst = this._firstId;
+      const first = items[0];
+      const firstId = first ? (isEventGroup(first) ? first.representative.id : first.id) : undefined;
+      const stillPresent = prevFirst !== undefined && items.some((i) =>
+        (isEventGroup(i) ? i.events.some((e) => e.id === prevFirst) : i.id === prevFirst));
+      if (!stillPresent) this._renderLimit = RENDER_PAGE_SIZE;
+      this._firstId = firstId;
+    }
+  }
+
+  protected updated(): void {
+    const sentinel = this.renderRoot.querySelector('.load-sentinel');
+    const container = this.renderRoot.querySelector('.timeline-container') as HTMLElement | null;
+    this._observer?.disconnect();
+    if (!sentinel) return;
+    // With a fixed height the container scrolls; otherwise the page does.
+    const scrolls = container && getComputedStyle(container).maxHeight !== 'none';
+    this._observer = new IntersectionObserver((entries) => {
+      if (entries.some((en) => en.isIntersecting)) {
+        this._observer?.disconnect();
+        this._renderLimit += RENDER_PAGE_SIZE;
+        this.requestUpdate();
+      }
+    }, { root: scrolls || this.classList.contains('fill') ? container : null, rootMargin: '400px 0px' });
+    this._observer.observe(sentinel);
+  }
+
+  disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this._observer?.disconnect();
   }
 
   private _groupByDate(items: Array<ChronicleEvent | EventGroup>): DateSection[] {
