@@ -35,6 +35,20 @@ type ChangeCallback = () => void;
 const RESOLVE_CACHE_MAX = 3000;
 
 
+
+/**
+ * Template results pointing at HA's /media folder (e.g. a Synology share mounted
+ * as "Media" network storage) cannot be loaded by <img>/<video> directly – they
+ * need a signed URL. Convert them via media_source/resolve_media.
+ */
+async function resolveTemplateUrl(hass: HomeAssistant, url: string): Promise<string | undefined> {
+  if (url.startsWith('media-source://')) return resolveMediaUrl(hass, url);
+  if (url.startsWith('/media/') && !url.startsWith('/media/local/')) {
+    return resolveMediaUrl(hass, `media-source://media_source/local/${url.slice('/media/'.length)}`);
+  }
+  return url;
+}
+
 export class EventStore {
   private adapters: ISourceAdapter[] = [];
   private allEvents: ChronicleEvent[] = [];
@@ -506,8 +520,11 @@ export class EventStore {
 
           try {
             const results = await renderTemplateBatch(hass, template, contexts);
+            const resolved = await Promise.all(
+              results.map((r) => (r?.trim() ? resolveTemplateUrl(hass, r.trim()) : Promise.resolve(undefined))),
+            );
             for (let i = 0; i < evts.length; i++) {
-              const url = results[i]?.trim();
+              const url = resolved[i];
               if (url) {
                 evts[i].mediaUrl = url;
                 this.cacheSet(`img|${template}|${evts[i].id}`, url);
@@ -534,8 +551,11 @@ export class EventStore {
 
           try {
             const results = await renderTemplateBatch(hass, template, contexts);
+            const resolved = await Promise.all(
+              results.map((r) => (r?.trim() ? resolveTemplateUrl(hass, r.trim()) : Promise.resolve(undefined))),
+            );
             for (let i = 0; i < evts.length; i++) {
-              const url = results[i]?.trim();
+              const url = resolved[i];
               if (url) {
                 evts[i].metadata = { ...evts[i].metadata, clip_url: url };
                 this.cacheSet(`clip|${template}|${evts[i].id}`, url);
