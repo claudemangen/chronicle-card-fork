@@ -283,6 +283,8 @@ export class DetailDialog extends LitElement {
   private _container: HTMLDivElement | null = null;
   private _returnFocus: Element | null = null;
   private _closeTimer?: ReturnType<typeof setTimeout>;
+  /** When the dialog was opened; backdrop taps right after are the opening tap's ghost click. */
+  private _openedAt = 0;
 
   static styles = css`:host { display: none; }`;
 
@@ -292,6 +294,7 @@ export class DetailDialog extends LitElement {
 
   show(event: ChronicleEvent, hass?: HomeAssistant): void {
     clearTimeout(this._closeTimer);
+    this._openedAt = Date.now();
     this._event = event;
     this._hass = hass;
     this._clipCandidates = clipCandidates((event.metadata?.clip_url as string | undefined) || '');
@@ -359,7 +362,7 @@ export class DetailDialog extends LitElement {
 
     return html`
       <div class=${this._open ? 'open' : ''}>
-        <div class="overlay" @click=${() => this.close()}></div>
+        <div class="overlay" @click=${this._onOverlayClick}></div>
         <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="chronicle-dialog-title" tabindex="-1">
           <div class="handle"></div>
           <button class="close-btn" aria-label=${localize('chronicle.detail.close')} @click=${() => this.close()}>
@@ -482,6 +485,16 @@ export class DetailDialog extends LitElement {
     }
     this._renderDialog();
   }
+
+  /**
+   * iOS sends the opening tap's click after touchend, by which time the
+   * backdrop is under the finger, so it would close the dialog it just
+   * opened. Ignore backdrop clicks for a moment after opening.
+   */
+  private _onOverlayClick = (): void => {
+    if (Date.now() - this._openedAt < 500) return;
+    this.close();
+  };
 
   private _moreInfo(entityId: string): void {
     this.close();
