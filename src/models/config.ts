@@ -1,16 +1,48 @@
-import { SeverityLevel } from './event';
+import { ChronicleAction, SeverityLevel } from './event';
 
-/** HA-standard action configuration for tap/hold on timeline events. */
+/**
+ * Tap/hold action — HA's native action schema, handed to the frontend via the
+ * `hass-action` event, so every native action type (perform-action, url,
+ * toggle, assist, confirmation, …) works. `default` is Chronicle's own: open
+ * the detail dialog. String fields support `{field}` event placeholders.
+ */
 export interface ActionConfig {
-  action: 'more-info' | 'navigate' | 'call-service' | 'none' | 'default';
+  action:
+    | 'default'
+    | 'more-info'
+    | 'toggle'
+    | 'navigate'
+    | 'url'
+    | 'perform-action'
+    | 'call-service'
+    | 'assist'
+    | 'fire-dom-event'
+    | 'none';
   navigation_path?: string;
+  url_path?: string;
+  perform_action?: string;
+  data?: Record<string, unknown>;
+  target?: { entity_id?: string | string[]; device_id?: string | string[]; area_id?: string | string[] };
+  /** Pre-2024.8 names — still accepted by HA. */
   service?: string;
   service_data?: Record<string, unknown>;
-  target?: { entity_id?: string | string[]; device_id?: string | string[]; area_id?: string | string[] };
+  [key: string]: unknown;
 }
 
-/** Per-entity overrides within a history source. */
-export interface EntityOverrides {
+/**
+ * Event text overrides (history and logbook sources). Templates use `{field}`
+ * placeholders — the same machinery as action strings — and `{title}` /
+ * `{description}` hold the default text. Empty templates mean "default".
+ */
+export interface EventTextConfig {
+  title_template?: string;
+  description_template?: string;
+  /** false = no description line for these events. */
+  show_description?: boolean;
+}
+
+/** Per-entity overrides within a history or logbook source. */
+export interface EntityOverrides extends EventTextConfig {
   name?: string;
   state_filter?: string[];
   state_map?: Record<string, string>;
@@ -22,13 +54,14 @@ export interface EntityOverrides {
   color?: string;
   severity?: SeverityLevel;
   image_template?: string;
-  /** Optional clip URL template for video playback in the detail dialog (per-entity override). */
+  clip_template?: string;
+  /** Alias of `clip_template`. */
   clip_url_template?: string;
   tap_action?: ActionConfig;
   hold_action?: ActionConfig;
 }
 
-export interface SourceConfig {
+export interface SourceConfig extends EventTextConfig {
   type: 'calendar' | 'rest' | 'history' | 'static' | 'logbook';
   name?: string;
   entity?: string;
@@ -39,9 +72,10 @@ export interface SourceConfig {
   field_map?: Record<string, string>;
   media_url_template?: string;
   /**
-   * Optional template for a video clip URL (e.g. Frigate clip.mp4), expanded
+   * REST: template for a video clip URL (e.g. Frigate clip.mp4), expanded
    * with the same `{field}` placeholders as media_url_template. When set, the
    * detail dialog plays the clip instead of showing the still/gif thumbnail.
+   * History/logbook: alias of `clip_template` (see clipTemplateOf).
    */
   clip_url_template?: string;
   ws_params?: Record<string, unknown>;
@@ -51,23 +85,17 @@ export interface SourceConfig {
   default_severity?: SeverityLevel;
   icon_map?: Record<string, string>;
   color_map?: Record<string, string>;
-  actions?: Array<{
-    label: string;
-    icon?: string;
-    type: 'service' | 'navigate' | 'fire-event';
-    service?: string;
-    serviceData?: Record<string, unknown>;
-    target?: { entity_id?: string };
-    url?: string;
-    eventType?: string;
-    eventData?: Record<string, unknown>;
-  }>;
+  /** Buttons rendered under each event. */
+  actions?: ChronicleAction[];
   state_map?: Record<string, string>;
   state_color?: Record<string, string>;
   state_icon?: Record<string, string>;
   show_attributes?: string[];
   state_filter?: string[];
+  /** Jinja2 (or a plain URL/path) resolved to the event's image. */
   image_template?: string;
+  /** Jinja2 (or a plain URL/path) resolved to a video clip for the detail dialog. */
+  clip_template?: string;
   tap_action?: ActionConfig;
   hold_action?: ActionConfig;
   /**
@@ -86,6 +114,15 @@ export interface SourceConfig {
     severity?: SeverityLevel;
     category?: string;
   }>;
+}
+
+/**
+ * Clip template of an entity source (history/logbook) or per-entity override.
+ * `clip_template` is the documented name; `clip_url_template` is accepted
+ * too, so the REST option's name doesn't get silently ignored.
+ */
+export function clipTemplateOf(c?: { clip_template?: string; clip_url_template?: string }): string | undefined {
+  return c?.clip_template || c?.clip_url_template || undefined;
 }
 
 export interface FilterConfig {
@@ -121,9 +158,14 @@ export interface AppearanceConfig {
   show_images?: boolean;
   show_icons?: boolean;
   show_severity_badge?: boolean;
-  show_source_badge?: boolean;
   show_category?: boolean;
   animate_new_events?: boolean;
+  /** Secondary description line (e.g. "Off → On"). Unset = shown, except in compact mode. */
+  show_description?: boolean;
+  /** Lines an event title may wrap onto before it is truncated. 1 = single line, 0 = no limit. */
+  title_lines?: number;
+  /** Same for the description line. */
+  description_lines?: number;
   severity_colors?: Partial<Record<SeverityLevel, string>>;
 }
 
@@ -133,7 +175,11 @@ export interface ChronicleCardConfig {
   layout?: 'vertical' | 'horizontal';
   show_layout_toggle?: boolean;
   max_events?: number;
+  /** Whole numbers count calendar days (0 = today since midnight); fractions are a rolling window. */
   days_back?: number;
+  /** Look ahead (calendar/static sources), same day semantics as days_back. */
+  days_forward?: number;
+  /** Unset = follow the user's Home Assistant profile setting. */
   time_format?: '12h' | '24h';
   language?: string;
   show_header?: boolean;
@@ -149,6 +195,8 @@ export interface ChronicleCardConfig {
   filters?: FilterConfig;
   grouping?: GroupingConfig;
   appearance?: AppearanceConfig;
+  /** Sections-view sizing written by HA's layout editor. */
+  grid_options?: { rows?: number | 'auto'; columns?: number | 'full' };
 }
 
 export const DEFAULT_CONFIG: Partial<ChronicleCardConfig> = {
@@ -156,8 +204,10 @@ export const DEFAULT_CONFIG: Partial<ChronicleCardConfig> = {
   show_layout_toggle: true,
   max_events: 50,
   days_back: 7,
-  time_format: '24h',
+  days_forward: 0,
   show_header: true,
+  show_date_picker: false,
+  date_format: 'profile',
   filters: {
     categories: [],
     severities: [],
@@ -183,9 +233,10 @@ export const DEFAULT_CONFIG: Partial<ChronicleCardConfig> = {
     show_images: true,
     show_icons: true,
     show_severity_badge: true,
-    show_source_badge: false,
     show_category: true,
     animate_new_events: true,
+    title_lines: 1,
+    description_lines: 1,
     severity_colors: {
       critical: '#D32F2F',
       warning: '#FF9800',
