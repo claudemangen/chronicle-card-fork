@@ -41,7 +41,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
   default: '#78909C',
 };
 
-export const CARD_VERSION = '1.15.3';
+export const CARD_VERSION = '1.15.4';
 export const CARD_NAME = 'chronicle-card-local-snaps';
 export const EDITOR_NAME = 'chronicle-card-local-snaps-editor';
 

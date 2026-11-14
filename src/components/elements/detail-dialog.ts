@@ -6,6 +6,7 @@ import { formatDateTime } from '../../utils/date-utils';
 import { localize } from '../../localize';
 import { HomeAssistant } from '../../types';
 import { authorizeClipUrl, clipCandidates } from '../../utils/clip-url';
+import { describe, isDebug, trace } from '../../utils/debug';
 
 const VIDEO_RE = /\.(mp4|webm|mov|m3u8|mkv|ogv)([?#]|$)/i;
 
@@ -294,6 +295,15 @@ export class DetailDialog extends LitElement {
 
   show(event: ChronicleEvent, hass?: HomeAssistant): void {
     clearTimeout(this._closeTimer);
+    trace(`dialog show "${event.title}" clip=${(event.metadata?.clip_url as string) || '-'}`);
+    if (isDebug() && !this._docTrace) {
+      this._docTrace = (ev: Event) => {
+        if (!this._container) return;
+        const path = ev.composedPath();
+        trace(`doc ${ev.type} target=${describe(path[0])} inDialog=${path.includes(this._container)} defaultPrevented=${ev.defaultPrevented}`);
+      };
+      for (const t of ['pointerdown', 'pointerup', 'click', 'touchend']) document.addEventListener(t, this._docTrace, true);
+    }
     this._openedAt = Date.now();
     this._event = event;
     this._hass = hass;
@@ -315,7 +325,8 @@ export class DetailDialog extends LitElement {
     });
   }
 
-  close(): void {
+  close(reason = 'api'): void {
+    trace(`dialog close reason=${reason} open=${this._open} ${Date.now() - this._openedAt}ms after show`);
     if (!this._open) return;
     this._open = false;
     this._clipToken++;
@@ -336,7 +347,10 @@ export class DetailDialog extends LitElement {
     adoptStyles(shadow, [dialogStyles]);
   }
 
+  private _docTrace?: (ev: Event) => void;
+
   private _removeContainer(): void {
+    if (this._container) trace('dialog container removed');
     this._container?.remove();
     this._container = null;
   }
@@ -362,10 +376,10 @@ export class DetailDialog extends LitElement {
 
     return html`
       <div class=${this._open ? 'open' : ''} @click=${this._ghostGuard}>
-        <div class="overlay" @click=${() => this.close()}></div>
+        <div class="overlay" @click=${() => this.close('backdrop')}></div>
         <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="chronicle-dialog-title" tabindex="-1">
           <div class="handle"></div>
-          <button class="close-btn" aria-label=${localize('chronicle.detail.close')} @click=${() => this.close()}>
+          <button class="close-btn" aria-label=${localize('chronicle.detail.close')} @click=${() => this.close('close-button')}>
             <ha-icon icon="mdi:close"></ha-icon>
           </button>
 
@@ -497,6 +511,7 @@ export class DetailDialog extends LitElement {
     capture: true,
     handleEvent: (ev: Event): void => {
       if (Date.now() - this._openedAt < 500) {
+        trace(`ghost click swallowed on ${describe(ev.composedPath()[0])}`);
         ev.preventDefault();
         ev.stopPropagation();
       }
@@ -504,7 +519,7 @@ export class DetailDialog extends LitElement {
   };
 
   private _moreInfo(entityId: string): void {
-    this.close();
+    this.close('more-info');
     // Let the close animation start before HA's more-info dialog opens.
     // Dispatched from this element — inside the card's DOM tree — so HA hears it.
     setTimeout(() => {
@@ -519,7 +534,7 @@ export class DetailDialog extends LitElement {
   private _onKeydown = (e: KeyboardEvent): void => {
     if (e.key === 'Escape' && this._open) {
       e.stopPropagation();
-      this.close();
+      this.close('escape');
     }
   };
 
@@ -530,6 +545,7 @@ export class DetailDialog extends LitElement {
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
+    trace(`dialog element DISCONNECTED (open=${this._open})`);
     document.removeEventListener('keydown', this._onKeydown);
     clearTimeout(this._closeTimer);
     this._open = false;

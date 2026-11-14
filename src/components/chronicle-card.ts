@@ -7,6 +7,7 @@ import { EventStore } from '../store/event-store';
 import { setLocale } from '../localize';
 import { setFormatContext } from '../utils/date-utils';
 import { EDITOR_NAME } from '../constants';
+import { setDebug, trace } from '../utils/debug';
 import type { DetailDialog } from './elements/detail-dialog';
 import './layouts/vertical-timeline';
 import './layouts/horizontal-timeline';
@@ -77,6 +78,7 @@ export class ChronicleCard extends LitElement {
       appearance: { ...DEFAULT_CONFIG.appearance, ...config.appearance },
     } as ChronicleCardConfig;
 
+    setDebug(this._config.debug === true, this._hass);
     if (layoutChanged) this._layout = this._config.layout ?? 'vertical';
     this._store.configure(this._config);
     if (!this._config.show_date_picker) this._selectedDate = '';
@@ -88,6 +90,7 @@ export class ChronicleCard extends LitElement {
   set hass(hass: HomeAssistant) {
     const old = this._hass;
     this._hass = hass;
+    if (!old && this._config?.debug) setDebug(true, hass);
 
     // Only re-render for hass changes that affect formatting — the timeline
     // itself re-renders through the store subscription.
@@ -113,6 +116,7 @@ export class ChronicleCard extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback();
+    trace('card connected');
     this._storeUnsub?.();
     this._storeUnsub = this._store.subscribe(() => {
       this._items = [...this._store.items];
@@ -125,6 +129,7 @@ export class ChronicleCard extends LitElement {
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
+    trace('card DISCONNECTED');
     document.removeEventListener('click', this._outsideClick, { capture: true } as EventListenerOptions);
     this._storeUnsub?.();
     this._storeUnsub = undefined;
@@ -644,6 +649,7 @@ export class ChronicleCard extends LitElement {
   }
 
   private _onShowDetail(e: CustomEvent) {
+    trace(`show-detail received, dialog element ${this._dialog ? (this._dialog.isConnected ? 'connected' : 'NOT connected') : 'MISSING'}`);
     this._dialog?.show(e.detail.event as ChronicleEvent, this._hass);
   }
 

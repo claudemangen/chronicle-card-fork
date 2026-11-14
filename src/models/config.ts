@@ -182,6 +182,8 @@ export interface ChronicleCardConfig {
   /** Unset = follow the user's Home Assistant profile setting. */
   time_format?: '12h' | '24h';
   language?: string;
+  /** Fork: write tap/dialog traces to the browser console and HA's system log. */
+  debug?: boolean;
   show_header?: boolean;
   /** Show a date picker in the header to view events from a specific day. */
   show_date_picker?: boolean;

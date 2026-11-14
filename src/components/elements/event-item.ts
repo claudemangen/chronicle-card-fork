@@ -1,3 +1,4 @@
+import { trace } from '../../utils/debug';
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { ChronicleEvent } from '../../models/event';
@@ -236,7 +237,7 @@ export class EventItem extends LitElement {
           tabindex="0"
           @pointerdown=${this._onPointerDown}
           @pointerup=${this._onPointerUp}
-          @pointercancel=${this._cancelHold}
+          @pointercancel=${() => { trace('item pointercancel'); this._cancelHold(); }}
           @pointerleave=${this._onPointerLeave}
           @click=${this._onClick}
           @keydown=${this._onKeyDown}
@@ -286,6 +287,7 @@ export class EventItem extends LitElement {
   private _lastActionAt = 0;
 
   private _onPointerDown(e: PointerEvent) {
+    trace(`item pointerdown type=${e.pointerType} button=${e.button} "${this.event?.title}"`);
     // Only the mouse has meaningful buttons; touch/pen report 0 or -1 depending on the engine
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     this._pressed = true;
@@ -300,6 +302,7 @@ export class EventItem extends LitElement {
   }
 
   private _onPointerUp(e: PointerEvent) {
+    trace(`item pointerup type=${e.pointerType} pressed=${this._pressed} hold=${this._holdFired} dx=${Math.round(e.clientX - this._startX)} dy=${Math.round(e.clientY - this._startY)}`);
     if (this._holdTimer) {
       clearTimeout(this._holdTimer);
       this._holdTimer = null;
@@ -320,6 +323,7 @@ export class EventItem extends LitElement {
    * every tap; a touch that turns into a scroll ends in pointercancel instead.
    */
   private _onPointerLeave(e: PointerEvent) {
+    trace(`item pointerleave type=${e.pointerType}`);
     if (e.pointerType === 'mouse') this._cancelHold();
   }
 
@@ -328,6 +332,7 @@ export class EventItem extends LitElement {
    * the HA iOS app). The browser only sends click for a real tap, not a scroll.
    */
   private _onClick() {
+    trace(`item click (${Date.now() - this._lastActionAt}ms after last action, hold=${this._holdFired})`);
     if (this._holdFired || Date.now() - this._lastActionAt < 700) return;
     this._cancelHold();
     this._lastActionAt = Date.now();
@@ -351,6 +356,7 @@ export class EventItem extends LitElement {
   }
 
   private _handleAction(type: 'tap' | 'hold') {
+    trace(`item action ${type}`);
     handleEventAction(this, this.event, type);
   }
 }
