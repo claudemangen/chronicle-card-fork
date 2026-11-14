@@ -361,8 +361,8 @@ export class DetailDialog extends LitElement {
     const showMoreInfo = !!e.entityId && ['history', 'logbook', 'calendar'].includes(e.sourceType);
 
     return html`
-      <div class=${this._open ? 'open' : ''}>
-        <div class="overlay" @click=${this._onOverlayClick}></div>
+      <div class=${this._open ? 'open' : ''} @click=${this._ghostGuard}>
+        <div class="overlay" @click=${() => this.close()}></div>
         <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="chronicle-dialog-title" tabindex="-1">
           <div class="handle"></div>
           <button class="close-btn" aria-label=${localize('chronicle.detail.close')} @click=${() => this.close()}>
@@ -487,13 +487,20 @@ export class DetailDialog extends LitElement {
   }
 
   /**
-   * iOS sends the opening tap's click after touchend, by which time the
-   * backdrop is under the finger, so it would close the dialog it just
-   * opened. Ignore backdrop clicks for a moment after opening.
+   * iOS sends the opening tap's click after touchend. By then the sliding
+   * sheet or its backdrop is under the finger, so that click would close the
+   * dialog (backdrop, More info) or hit the clip/Open clip link. Swallow every
+   * click inside the dialog for a moment after opening (capture phase, so it
+   * runs before the target's own handler).
    */
-  private _onOverlayClick = (): void => {
-    if (Date.now() - this._openedAt < 500) return;
-    this.close();
+  private _ghostGuard = {
+    capture: true,
+    handleEvent: (ev: Event): void => {
+      if (Date.now() - this._openedAt < 500) {
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
+    },
   };
 
   private _moreInfo(entityId: string): void {

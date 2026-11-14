@@ -1,6 +1,6 @@
 {
   "name": "chronicle-card",
-  "version": "1.15.2",
+  "version": "1.15.3",
   "description": "A universal, extensible timeline card for Home Assistant",
   "main": "dist/chronicle-card.js",
   "scripts": {
