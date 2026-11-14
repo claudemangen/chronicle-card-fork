@@ -237,7 +237,8 @@ export class EventItem extends LitElement {
           @pointerdown=${this._onPointerDown}
           @pointerup=${this._onPointerUp}
           @pointercancel=${this._cancelHold}
-          @pointerleave=${this._cancelHold}
+          @pointerleave=${this._onPointerLeave}
+          @click=${this._onClick}
           @keydown=${this._onKeyDown}
           @contextmenu=${(ev: Event) => { if (this.event.holdAction) ev.preventDefault(); }}
         >
@@ -281,15 +282,19 @@ export class EventItem extends LitElement {
   private _holdFired = false;
   private _startX = 0;
   private _startY = 0;
+  /** When the pointer path last fired a tap/hold, so the click fallback doesn't repeat it. */
+  private _lastActionAt = 0;
 
   private _onPointerDown(e: PointerEvent) {
-    if (e.button !== 0) return;
+    // Only the mouse has meaningful buttons; touch/pen report 0 or -1 depending on the engine
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
     this._pressed = true;
     this._holdFired = false;
     this._startX = e.clientX;
     this._startY = e.clientY;
     this._holdTimer = setTimeout(() => {
       this._holdFired = true;
+      this._lastActionAt = Date.now();
       this._handleAction('hold');
     }, HOLD_DURATION);
   }
@@ -303,7 +308,30 @@ export class EventItem extends LitElement {
     this._pressed = false;
     // Ignore if pointer moved (user was scrolling, not tapping)
     if (Math.abs(e.clientX - this._startX) > 10 || Math.abs(e.clientY - this._startY) > 10) return;
-    if (!this._holdFired) this._handleAction('tap');
+    if (!this._holdFired) {
+      this._lastActionAt = Date.now();
+      this._handleAction('tap');
+    }
+  }
+
+  /**
+   * Leaving the row cancels a mouse press. Touch pointers are left alone:
+   * iOS WebKit can send pointerleave around pointerup, which would swallow
+   * every tap; a touch that turns into a scroll ends in pointercancel instead.
+   */
+  private _onPointerLeave(e: PointerEvent) {
+    if (e.pointerType === 'mouse') this._cancelHold();
+  }
+
+  /**
+   * Fallback for engines whose pointer events didn't produce a tap (seen in
+   * the HA iOS app). The browser only sends click for a real tap, not a scroll.
+   */
+  private _onClick() {
+    if (this._holdFired || Date.now() - this._lastActionAt < 700) return;
+    this._cancelHold();
+    this._lastActionAt = Date.now();
+    this._handleAction('tap');
   }
 
   private _cancelHold() {
