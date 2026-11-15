@@ -6,7 +6,7 @@ import { ChronicleEvent, EventGroup } from '../models/event';
 import { EventStore } from '../store/event-store';
 import { setLocale } from '../localize';
 import { setFormatContext } from '../utils/date-utils';
-import { EDITOR_NAME } from '../constants';
+import { CARD_VERSION, EDITOR_NAME } from '../constants';
 import { setDebug, trace } from '../utils/debug';
 import type { DetailDialog } from './elements/detail-dialog';
 import './layouts/vertical-timeline';
@@ -445,6 +445,7 @@ export class ChronicleCard extends LitElement {
           <div class="card-header">
             <span class="title-wrap">
               <span class="title">${this._config.title ?? ''}</span>
+              ${this._config.debug ? html`<span class="current-date">v${CARD_VERSION} debug</span>` : ''}
               ${headerDate && this._visibleDate ? html`<span class="current-date">${this._visibleDate}</span>` : ''}
             </span>
             ${this._config.show_date_picker ? this._renderDatePicker() : ''}

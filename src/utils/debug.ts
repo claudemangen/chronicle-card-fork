@@ -1,4 +1,5 @@
 import { HomeAssistant } from '../types';
+import { CARD_VERSION } from '../constants';
 
 /**
  * Opt-in tracing (`debug: true` in the card config) for problems that only
@@ -18,6 +19,7 @@ export function setDebug(on: boolean, hass?: HomeAssistant): void {
   if (hass) hassRef = hass;
   if (on && hassRef && !envLogged) {
     envLogged = true;
+    trace(`version ${CARD_VERSION}`);
     trace(`env ua="${navigator.userAgent}" vendor="${navigator.vendor}" vw=${window.innerWidth}x${window.innerHeight} touch=${'ontouchstart' in window}`);
     window.addEventListener('resize', () => trace(`window resize ${window.innerWidth}x${window.innerHeight}`));
     window.visualViewport?.addEventListener('resize', () => trace(`visualViewport resize ${Math.round(window.visualViewport!.width)}x${Math.round(window.visualViewport!.height)}`));
@@ -41,12 +43,12 @@ function flush(): void {
   if (!hassRef || queue.length === 0) return;
   const lines = queue;
   queue = [];
-  hassRef.callWS({
-    type: 'system_log/write',
-    logger: 'chronicle_card.debug',
-    level: 'warning',
-    message: `[chronicle-card debug]\n${lines.join('\n')}`,
-  }).catch(() => { /* not admin or offline: console only */ });
+  const message = `[chronicle-card debug] user=${(hassRef as unknown as { user?: { name?: string } }).user?.name ?? "?"}\n${lines.join('\n')}`;
+  // The system_log.write service is callable by any user; the
+  // system_log/write websocket command needs admin.
+  hassRef.callService('system_log', 'write', { message, level: 'warning', logger: 'chronicle_card.debug' })
+    .catch(() => hassRef!.callWS({ type: 'system_log/write', logger: 'chronicle_card.debug', level: 'warning', message }))
+    .catch((err: unknown) => console.warn('[chronicle-card debug] could not write to HA log', err));
 }
 
 /** Short description of an event target for traces. */
