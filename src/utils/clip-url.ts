@@ -129,6 +129,18 @@ export async function authorizeClipUrl(hass: HomeAssistant | undefined, url: str
     }
     const parsed = parseSameOrigin(url);
     if (!parsed || !needsSigning(parsed)) return url;
+    // /media/<folder>/… (e.g. a Synology share mounted as "Media" network
+    // storage) is a file path under HA's media folder, not an HTTP route: HA
+    // only serves it as /media/local/<folder>/…. Resolve it through the local
+    // media source, the same way image templates do (store/event-store.ts).
+    if (parsed.pathname.startsWith('/media/') && !parsed.pathname.startsWith('/media/local/')) {
+      const res = await hass.callWS<{ url: string }>({
+        type: 'media_source/resolve_media',
+        media_content_id: `media-source://media_source/local/${decodeURIComponent(parsed.pathname.slice('/media/'.length))}`,
+        expires: SIGN_EXPIRES,
+      });
+      return res?.url || url;
+    }
     const res = await hass.callWS<{ path: string }>({
       type: 'auth/sign_path',
       path: `${parsed.pathname}${parsed.search}`,
